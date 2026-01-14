@@ -1,10 +1,120 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Trail Issue Reporting</title>
+  <title>Report a Trail Issue</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet/dist/leaflet.css"
+  />
+
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-  <h1>Trail Issue Reporting</h1>
-  <p>Setup in progress.</p>
+
+<h2>Report a Trail Issue</h2>
+
+<label for="siteSelect">Site</label>
+<select id="siteSelect"></select>
+
+<div id="map"></div>
+
+<label for="issueType">Issue Type</label>
+<select id="issueType">
+  <option value="Erosion">Erosion</option>
+  <option value="Blowdown">Blowdown / Fallen Tree</option>
+  <option value="Invasives">Invasive Plants</option>
+  <option value="Drainage">Drainage / Water</option>
+  <option value="Safety">Safety Hazard</option>
+  <option value="Other">Other</option>
+</select>
+
+<label for="severity">Severity</label>
+<select id="severity">
+  <option value="Low">Low</option>
+  <option value="Medium">Medium</option>
+  <option value="High">High</option>
+</select>
+
+<label for="description">Description (optional)</label>
+<textarea id="description" rows="3"></textarea>
+
+<button onclick="submitIssue()">Submit Issue</button>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- Site configuration -->
+<script src="sites.js"></script>
+
+<script>
+let map;
+let marker = null;
+
+// 🔴 TEMPORARY PLACEHOLDER
+// We will replace this later with the real intake method
+const intakeMode = "console";
+
+const siteSelect = document.getElementById("siteSelect");
+
+// Populate site dropdown
+Object.keys(sites).forEach(site => {
+  const opt = document.createElement("option");
+  opt.value = site;
+  opt.textContent = site;
+  siteSelect.appendChild(opt);
+});
+
+// Initialize map
+const firstSite = sites[siteSelect.value];
+map = L.map('map').setView(firstSite.center, firstSite.zoom);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+// Handle map clicks
+map.on('click', function(e) {
+  if (marker) {
+    map.removeLayer(marker);
+  }
+  marker = L.marker(e.latlng).addTo(map);
+});
+
+// Change site → recenter map
+siteSelect.addEventListener('change', () => {
+  const site = sites[siteSelect.value];
+  map.setView(site.center, site.zoom);
+  if (marker) {
+    map.removeLayer(marker);
+    marker = null;
+  }
+});
+
+function submitIssue() {
+  if (!marker) {
+    alert("Please tap the map to mark the issue location.");
+    return;
+  }
+
+  const payload = {
+    site: siteSelect.value,
+    issueType: document.getElementById("issueType").value,
+    severity: document.getElementById("severity").value,
+    latitude: marker.getLatLng().lat,
+    longitude: marker.getLatLng().lng,
+    description: document.getElementById("description").value
+  };
+
+  console.log("ISSUE SUBMITTED:", payload);
+  alert("Submission captured (test mode).");
+}
+</script>
+
 </body>
 </html>
