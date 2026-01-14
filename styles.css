@@ -1,3 +1,19 @@
+@font-face {
+    font-family: 'd-dinregular';
+    src: url('assets/fonts/d-din-webfont.woff2') format('woff2'),
+         url('assets/fonts/d-din-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'd-dindin-bold';
+    src: url('assets/fonts/d-din-bold-webfont.woff2') format('woff2'),
+         url('assets/fonts/d-din-bold-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
 body {
   font-family: Arial, sans-serif;
   max-width: 700px;
