@@ -1,0 +1,40 @@
+body {
+  font-family: Arial, sans-serif;
+  max-width: 700px;
+  margin: auto;
+  padding: 10px;
+}
+
+h2 {
+  text-align: center;
+}
+
+label {
+  font-weight: bold;
+  display: block;
+  margin-top: 12px;
+}
+
+select, textarea, button {
+  width: 100%;
+  padding: 8px;
+  margin-top: 4px;
+}
+
+#map {
+  height: 350px;
+  margin: 12px 0;
+  border: 1px solid #ccc;
+}
+
+button {
+  background-color: #2e7d32;
+  color: white;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #256628;
+}
