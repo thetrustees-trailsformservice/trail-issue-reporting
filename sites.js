@@ -28,7 +28,8 @@ const sites = {
   },
   "Eleanor Cabot Bradley Estate": {
     center: [42.200349254121406, -71.12436733684274],
-    zoom: 15
+    zoom: 15,
+    boundary: "assets/boundaries/Eleanor_Cabot_Bradley_Estate.geojson"
   },
   "Francis William Bird Park": {
     center: [42.15706910789175, -71.21629616203583],
