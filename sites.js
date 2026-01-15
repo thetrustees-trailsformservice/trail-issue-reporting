@@ -8,7 +8,8 @@ const sites = {
   },
   "Armstrong-Kelley Park": {
     center: [41.62841480486134, -70.38034414659099],
-    zoom: 17
+    zoom: 17,
+    boundary: "assets/boundaries/Armstrong_Kelley_Park.geojson"
   },
   "Copicut Woods": {
     center: [41.70242094669979, -71.0515022088127],
@@ -16,15 +17,18 @@ const sites = {
   },
   "Cornell Farm": {
     center: [41.555900026882846, -70.96106246911668],
-    zoom: 15
+    zoom: 15,
+    boundary: "assets/boundaries/Cornell_Farm.geojson"
   },
   "East Over Reservation": {
     center: [41.747965756075416, -70.81139299061721],
-    zoom: 16
+    zoom: 16,
+    boundary: "assets/boundaries/East_Over_Reservation.geojson"
   },
   "East Over: Hales Brook and Sippican River": {
     center: [41.7396176529525, -70.78087923250978],
-    zoom: 15
+    zoom: 15,
+    boundary: "assets/boundaries/East_Over_Hales_Brook_and_Sippican_River.geojson"
   },
   "Eleanor Cabot Bradley Estate": {
     center: [42.200349254121406, -71.12436733684274],
@@ -33,43 +37,53 @@ const sites = {
   },
   "Francis William Bird Park": {
     center: [42.15706910789175, -71.21629616203583],
-    zoom: 15
+    zoom: 15,
+    boundary: "assets/boundaries/Francis_William_Bird_Park.geojson"
   },
   "Governor Oliver Ames Estate": {
     center: [42.07036327686354, -71.09897794998899],
-    zoom: 16
+    zoom: 16,
+    boundary: "assets/boundaries/Gov_Oliver_Ames_Estate.geojson"
   },
   "Holmes Reservation": {
     center: [41.97021220891568, -70.6766225572128],
-    zoom: 16
+    zoom: 16,
+    boundary: "assets/boundaries/Holmes_Reservation.geojson"
   },
   "Lowell Holly": {
     center: [41.66437003327789, -70.48049257614025],
-    zoom: 14
+    zoom: 14,
+    boundary: "assets/boundaries/Lowell_Holly.geojson"
   },
   "Lyman Reserve": {
     center: [41.764224796400754, -70.63380170730092],
-    zoom: 15
+    zoom: 15,
+    boundary: "assets/boundaries/Lyman_Reserve.geojson"
   },
   "Mashpee River Reservation": {
     center: [41.62222414436522, -70.48030716856861],
-    zoom: 14
+    zoom: 14,
+    boundary: "assets/boundaries/Mashpee_River_Reservation.geojson"
   },
   "Moose Hill Farm": {
     center: [42.131265740545, -71.2128972316226],
-    zoom: 14
+    zoom: 14,
+    boundary: "assets/boundaries/Moose_Hill_Farm.geojson"
   },
   "Norris Reservation": {
     center: [42.15583757030394, -70.78673193707866],
-    zoom: 15
+    zoom: 15,
+    boundary: "assets/boundaries/Norris_Reservation.geojson"
   },
   "Signal Hill Reservation": {
     center: [42.18752055975955, -71.1604686706001],
-    zoom: 15
+    zoom: 15,
+    boundary: "assets/boundaries/Signal_Hill.geojson"
   },
-  "Slocum’s River Reserve": {
+  "Slocum's River Reserve": {
     center: [41.552675043437475, -71.00669412046506],
-    zoom: 15
+    zoom: 15,
+    boundary: "assets/boundaries/Slocums_River_Reserve.geojson"
   },
   "Weir River Farm": {
     center: [42.23991792827818, -70.85773397995227],
@@ -77,7 +91,8 @@ const sites = {
   },
   "Westport Town Farm": {
     center: [41.58000442761774, -71.07742205499062],
-    zoom: 16
+    zoom: 16,
+    boundary: "assets/boundaries/Westport_Town_Farm.geojson"
   },
   "Whitney and Thayer Woods": {
     center: [42.23190813345651, -70.83950609048523],
@@ -85,6 +100,7 @@ const sites = {
   },
   "World's End": {
     center: [42.26502546686153, -70.87470452174752],
-    zoom: 14
+    zoom: 14,
+    boundary: "assets/boundaries/Worlds_End.geojson"
   }
 };
