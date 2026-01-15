@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>REPORT A TRAIL ISSUE</title>
+  <title>Report a Trail Issue</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Leaflet CSS -->
@@ -16,7 +16,7 @@
 
 <body>
 
-<h2>Report a Trail Issue</h2>
+<h2>REPORT A TRAIL ISSUE</h2>
 
 <label for="siteSelect">Site</label>
 <select id="siteSelect"></select>
@@ -43,7 +43,7 @@
 <label for="description">Description (optional)</label>
 <textarea id="description" rows="3"></textarea>
 
-<button onclick="submitIssue()">Submit Issue</button>
+<button onclick="submitIssue()">SUBMIT ISSUE</button>
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -68,9 +68,43 @@ Object.keys(sites).forEach(site => {
   opt.textContent = site;
   siteSelect.appendChild(opt);
 });
+siteSelect.selectedIndex = 0;
+
 
 // Initialize map
+let boundaryLayer = null;
+
+async function applySiteBoundary(site) {
+  // Remove existing boundary
+  if (boundaryLayer) {
+    map.removeLayer(boundaryLayer);
+    boundaryLayer = null;
+  }
+
+  // If this site has no boundary defined, do nothing
+  if (!site.boundary) return;
+
+  try {
+    const response = await fetch(site.boundary);
+    const geojson = await response.json();
+
+    boundaryLayer = L.geoJSON(geojson, {
+      style: {
+        color: "#2e7d32",
+        weight: 2,
+        fillOpacity: 0.15
+      }
+    }).addTo(map);
+
+    // Zoom to boundary
+    map.fitBounds(boundaryLayer.getBounds());
+  } catch (err) {
+    console.error("Failed to load boundary:", err);
+  }
+}
+// Initialize map
 const firstSite = sites[siteSelect.value];
+
 map = L.map('map').setView(firstSite.center, firstSite.zoom);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -78,6 +112,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+applySiteBoundary(firstSite);
 // Handle map clicks
 map.on('click', function(e) {
   if (marker) {
@@ -90,6 +125,7 @@ map.on('click', function(e) {
 siteSelect.addEventListener('change', () => {
   const site = sites[siteSelect.value];
   map.setView(site.center, site.zoom);
+  applySiteBoundary(site);
   if (marker) {
     map.removeLayer(marker);
     marker = null;
