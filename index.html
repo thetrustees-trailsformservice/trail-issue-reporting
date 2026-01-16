@@ -55,8 +55,33 @@
 let map;
 let marker = null;
 
-// 🔴 TEMPORARY PLACEHOLDER
-// We will replace this later with the real intake method
+const POWER_AUTOMATE_URL = "https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7823418fc89b4417928398e5c3fee82b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=GEAypdes3LSTSZEm39ASOMtQH1isZ3x95j-_fppaBcc";
+
+async function sendToPowerAutomate(data) {
+  console.log("sendToPowerAutomate() called", data);
+
+  try {
+    const response = await fetch(POWER_AUTOMATE_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+      throw new Error("Submission failed");
+    }
+
+    alert("Issue submitted successfully!");
+  } catch (err) {
+    console.error("Power Automate error:", err);
+    alert("Error submitting issue.");
+  }
+}
+
+
 const intakeMode = "console";
 
 const siteSelect = document.getElementById("siteSelect");
@@ -73,35 +98,51 @@ siteSelect.selectedIndex = 0;
 
 // Initialize map
 let boundaryLayer = null;
+let boundaryShadowLayer = null;
 
 async function applySiteBoundary(site) {
-  // Remove existing boundary
+  // Remove existing layers
   if (boundaryLayer) {
     map.removeLayer(boundaryLayer);
     boundaryLayer = null;
   }
+  if (boundaryShadowLayer) {
+    map.removeLayer(boundaryShadowLayer);
+    boundaryShadowLayer = null;
+  }
 
-  // If this site has no boundary defined, do nothing
-  if (!site.boundary) return;
+  if (!site || !site.boundary) return;
 
   try {
     const response = await fetch(site.boundary);
     const geojson = await response.json();
 
-    boundaryLayer = L.geoJSON(geojson, {
+    // 🟢 Shadow / glow layer (drawn first, underneath)
+    boundaryShadowLayer = L.geoJSON(geojson, {
       style: {
-        color: "#2e7d32",
-        weight: 3,
-        fillOpacity: 0.15
+        color: "#C4D600",   // light green glow
+        weight: 8,          // thicker than main boundary
+        opacity: 0.6,
+        fillOpacity: 0
       }
     }).addTo(map);
 
-    // Zoom to boundary
+    // 🟢 Main boundary (drawn on top)
+    boundaryLayer = L.geoJSON(geojson, {
+      style: {
+        color: "#569602",   // main boundary color
+        weight: 3,
+        fillOpacity: 0.1
+      }
+    }).addTo(map);
+
     map.fitBounds(boundaryLayer.getBounds());
+
   } catch (err) {
     console.error("Failed to load boundary:", err);
   }
 }
+
 // Initialize map
 const firstSite = sites[siteSelect.value];
 
@@ -133,6 +174,8 @@ siteSelect.addEventListener('change', () => {
 });
 
 function submitIssue() {
+  console.log("submitIssue() called");
+
   if (!marker) {
     alert("Please tap the map to mark the issue location.");
     return;
@@ -144,12 +187,16 @@ function submitIssue() {
     severity: document.getElementById("severity").value,
     latitude: marker.getLatLng().lat,
     longitude: marker.getLatLng().lng,
-    description: document.getElementById("description").value
+    description: document.getElementById("description").value,
+    submittedAt: new Date().toISOString()
   };
 
-  console.log("ISSUE SUBMITTED:", payload);
-  alert("Submission captured (test mode).");
+  console.log("Payload:", payload);
+
+  sendToPowerAutomate(payload);
 }
+
+
 </script>
 
 </body>
