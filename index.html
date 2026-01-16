@@ -43,6 +43,10 @@
 <label for="description">Description (optional)</label>
 <textarea id="description" rows="3"></textarea>
 
+<label for="photo">Upload Photo (optional)</label>
+<input type="file" id="photo" accept="image/*">
+
+
 <button onclick="submitIssue()">SUBMIT ISSUE</button>
 
 <!-- Leaflet JS -->
@@ -173,14 +177,50 @@ siteSelect.addEventListener('change', () => {
   }
 });
 
-function submitIssue() {
-  console.log("submitIssue() called");
+// Convert file to Base64
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsArrayBuffer(file); // read as raw binary, not DataURL
+    reader.onload = () => {
+      // Convert to base64 manually
+      const bytes = new Uint8Array(reader.result);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      resolve(btoa(binary));
+    };
+    reader.onerror = reject;
+  });
+}
 
+
+
+async function submitIssue() {
   if (!marker) {
     alert("Please tap the map to mark the issue location.");
     return;
   }
 
+  const photoInput = document.getElementById("photo");
+  const file = photoInput.files[0];
+
+  let photoBase64 = null;
+  let photoBase64Name = null;
+
+  if (file) {
+    try {
+      photoBase64 = await toBase64(file);
+      photoBase64Name = file.name;  // preserve original filename
+    } catch (err) {
+      console.error("Failed to convert photo:", err);
+      alert("Photo conversion failed.");
+      return;
+    }
+  }
+
+  // Build payload
   const payload = {
     site: siteSelect.value,
     issueType: document.getElementById("issueType").value,
@@ -188,14 +228,33 @@ function submitIssue() {
     latitude: marker.getLatLng().lat,
     longitude: marker.getLatLng().lng,
     description: document.getElementById("description").value,
-    submittedAt: new Date().toISOString()
+    submittedAt: new Date().toISOString(),
+    photoBase64: photoBase64,          // optional
+    photoBase64Name: photoBase64Name   // optional
   };
 
-  console.log("Payload:", payload);
+  try {
+    // Send to Power Automate
+    const response = await fetch(POWER_AUTOMATE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
 
-  sendToPowerAutomate(payload);
+    if (!response.ok) throw new Error("Submission failed");
+
+    alert("Issue submitted successfully!");
+
+    // Reset form
+    if (marker) map.removeLayer(marker);
+    marker = null;
+    document.getElementById("description").value = "";
+    photoInput.value = "";
+  } catch (err) {
+    console.error(err);
+    alert("Error submitting issue.");
+  }
 }
-
 
 </script>
 
