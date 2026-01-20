@@ -2,26 +2,32 @@
 // Each site has a center point and default zoom
 
 const sites = {
-  "Allen C. Haskell Public Gardens": {
-    center: [41.65506297892783, -70.94590886990241],
-    zoom: 17
-  },
   "Armstrong-Kelley Park": {
-    center: [41.62841480486134, -70.38034414659099],
+    center: [41.62920684379889, -70.38081967178935],
     zoom: 17,
     boundary: "assets/boundaries/Armstrong_Kelley_Park.geojson"
+  },
+  "Cape Poge Wildlife Refuge": {
+    center: [41.389665710343884, -70.45165847770149],
+    zoom: 15,
+    boundary: "assets/boundaries/Cape_Poge_Wildlife_Refuge.geojson"
   },
   "Copicut Woods": {
     center: [41.70242094669979, -71.0515022088127],
     zoom: 14
   },
   "Cornell Farm": {
-    center: [41.555900026882846, -70.96106246911668],
+    center: [41.555852996742516, -70.96138939183496],
     zoom: 15,
     boundary: "assets/boundaries/Cornell_Farm.geojson"
   },
+  "Coskata-Coatue Wildlife Refuge": {
+    center: [41.35599210412687, -70.0245909081541],
+    zoom: 15,
+    boundary: "assets/boundaries/Coskata_Coatue_Wildlife_Refuge.geojson"
+  },
   "East Over Reservation": {
-    center: [41.747965756075416, -70.81139299061721],
+    center: [41.74783800245519, -70.81160886775267],
     zoom: 16,
     boundary: "assets/boundaries/East_Over_Reservation.geojson"
   },
@@ -31,42 +37,47 @@ const sites = {
     boundary: "assets/boundaries/East_Over_Hales_Brook_and_Sippican_River.geojson"
   },
   "Eleanor Cabot Bradley Estate": {
-    center: [42.200349254121406, -71.12436733684274],
+    center: [42.20013585373492, -71.12443643509431],
     zoom: 15,
     boundary: "assets/boundaries/Eleanor_Cabot_Bradley_Estate.geojson"
   },
   "Francis William Bird Park": {
-    center: [42.15706910789175, -71.21629616203583],
+    center: [42.1570053981131, -71.21648717080619],
     zoom: 15,
     boundary: "assets/boundaries/Francis_William_Bird_Park.geojson"
   },
   "Governor Oliver Ames Estate": {
-    center: [42.07036327686354, -71.09897794998899],
+    center: [42.070533334751076, -71.1001010474235],
     zoom: 16,
     boundary: "assets/boundaries/Gov_Oliver_Ames_Estate.geojson"
   },
-  "Holmes Reservation": {
-    center: [41.97021220891568, -70.6766225572128],
-    zoom: 16,
-    boundary: "assets/boundaries/Holmes_Reservation.geojson"
+  "Long Point Wildlife Refuge": {
+    center: [41.36019278710403, -70.63241273422653],
+    zoom: 15,
+    boundary: "assets/boundaries/Long_Point_Wildlife_Refuge.geojson"
   },
   "Lowell Holly": {
-    center: [41.66437003327789, -70.48049257614025],
+    center: [41.66630999698034, -70.4816220377386],
     zoom: 14,
     boundary: "assets/boundaries/Lowell_Holly.geojson"
   },
   "Lyman Reserve": {
-    center: [41.764224796400754, -70.63380170730092],
+    center: [41.768804992054434, -70.63282250109933],
     zoom: 15,
     boundary: "assets/boundaries/Lyman_Reserve.geojson"
   },
   "Mashpee River Reservation": {
-    center: [41.62222414436522, -70.48030716856861],
+    center: [41.62848145494261, -70.48261419320067],
     zoom: 14,
     boundary: "assets/boundaries/Mashpee_River_Reservation.geojson"
   },
+  "Menemsha Hills and Brickyard Reservation": {
+    center: [41.369181530171886, -70.74922377044606],
+    zoom: 15,
+    boundary: "assets/boundaries/Menemsha_Hills.geojson"
+  },
   "Moose Hill Farm": {
-    center: [42.131265740545, -71.2128972316226],
+    center: [42.13060787935361, -71.21280601546168],
     zoom: 14,
     boundary: "assets/boundaries/Moose_Hill_Farm.geojson"
   },
@@ -76,21 +87,31 @@ const sites = {
     boundary: "assets/boundaries/Norris_Reservation.geojson"
   },
   "Signal Hill Reservation": {
-    center: [42.18752055975955, -71.1604686706001],
+    center: [42.18627810038251, -71.16073926438779],
     zoom: 15,
     boundary: "assets/boundaries/Signal_Hill.geojson"
   },
   "Slocum's River Reserve": {
-    center: [41.552675043437475, -71.00669412046506],
+    center: [41.55313566930044, -71.00625303356446],
     zoom: 15,
     boundary: "assets/boundaries/Slocums_River_Reserve.geojson"
+  },
+//  "Two Mile Farm": {
+//    center: [42.23991792827818, -70.85773397995227],
+//    zoom: 15,
+//    boundary: "assets/boundaries/"
+//  },
+  "Wasque": {
+    center: [41.35194030292235, -70.45933568696691],
+    zoom: 15,
+    boundary: "assets/boundaries/Wasque.geojson"
   },
   "Weir River Farm": {
     center: [42.23991792827818, -70.85773397995227],
     zoom: 15
   },
   "Westport Town Farm": {
-    center: [41.58000442761774, -71.07742205499062],
+    center: [41.58037783738651, -71.07768462503394],
     zoom: 16,
     boundary: "assets/boundaries/Westport_Town_Farm.geojson"
   },
@@ -99,7 +120,7 @@ const sites = {
     zoom: 14
   },
   "World's End": {
-    center: [42.26502546686153, -70.87470452174752],
+    center: [42.26496229308216, -70.87566639296985],
     zoom: 14,
     boundary: "assets/boundaries/Worlds_End.geojson"
   }
