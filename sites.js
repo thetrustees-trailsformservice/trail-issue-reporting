@@ -13,8 +13,9 @@ const sites = {
     boundary: "assets/boundaries/Cape_Poge_Wildlife_Refuge.geojson"
   },
   "Copicut Woods": {
-    center: [41.70242094669979, -71.0515022088127],
-    zoom: 14
+    center: [41.702917864842725, -71.05962294808069],
+    zoom: 14,
+    boundary: "assets/boundaries/Copicut_Woods.geojson"
   },
   "Cornell Farm": {
     center: [41.555852996742516, -70.96138939183496],

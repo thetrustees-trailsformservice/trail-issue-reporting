@@ -1,28 +1,28 @@
 @font-face {
-    font-family: 'd-dinregular';
-    src: url('assets/fonts/d-din-webfont.woff2') format('woff2'),
-         url('assets/fonts/d-din-webfont.woff') format('woff');
+    font-family: "d-dinregular";
+    src: url("/assets/fonts/d-din-webfont.woff2") format("woff2"),
+         url("/assets/fonts/d-din-webfont.woff") format("woff");
     font-weight: normal;
     font-style: normal;
 }
 
 @font-face {
-    font-family: 'd-dindin-bold';
-    src: url('assets/fonts/d-din-bold-webfont.woff2') format('woff2'),
-         url('assets/fonts/d-din-bold-webfont.woff') format('woff');
-    font-weight: normal;
+    font-family: "d-dindin-bold";
+    src: url("/assets/fonts/d-din-bold-webfont.woff2") format("woff2"),
+         url("/assets/fonts/d-din-bold-webfont.woff") format("woff");
+    font-weight: bold;
     font-style: normal;
 }
 
 body {
-    font-family: Arial, sans-serif;
+    font-family: "d-dinregular", Arial, sans-serif;
     max-width: 700px;
     margin: auto;
     padding: 10px;
 }
 
 h2 {
-    font-family: 'd-dindin-bold';
+    font-family: "d-dindin-bold";
     text-align: center;
 }
 
@@ -50,6 +50,11 @@ button {
     border: none;
     font-size: 18px;
     cursor: pointer;
+    border-radius: 40px;
+    margin-top: 30px;
+    height: 50px;
+    font-weight: 600;
+    letter-spacing: .15em;
 }
 
 button:hover {
