@@ -3,260 +3,117 @@
 <head>
   <title>Report a Trail Issue</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet/dist/leaflet.css"
-  />
-
   <!-- Custom styles -->
   <link rel="stylesheet" href="styles.css">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
 </head>
 
 <body>
 
 <h2>REPORT A TRAIL ISSUE</h2>
 
-<label for="siteSelect">Site</label>
-<select id="siteSelect"></select>
+<div class="form">
 
-<div id="map"></div>
+  <!-- SITE SELECT -->
+  <div class="input-wrapper">
+    <select id="siteSelect">
+      <option value="" selected disabled></option>
+    </select>
+    <label for="siteSelect">Choose a site</label>
+  </div>
+  <div class="hintRow">
+    <p id="siteHint" class="fieldHint required">* Required</p>
+    <p class="formHelpText">Which site are you reporting for?</p>
+  </div>
 
-<label for="issueType">Issue Type</label>
-<select id="issueType">
-  <option value="Erosion">Erosion</option>
-  <option value="Blowdown">Blowdown / Fallen Tree</option>
-  <option value="Invasives">Invasive Plants</option>
-  <option value="Drainage">Drainage / Water</option>
-  <option value="Safety">Safety Hazard</option>
-  <option value="Other">Other</option>
-</select>
+  <!-- MAP -->
+  <div id="map"></div>
+  <div class="hintRow">
+    <p class="fieldHint required">* Required</p>
+    <p class="formHelpText">Click the map to mark the issue location.</p>
+  </div>
 
-<label for="severity">Severity</label>
-<select id="severity">
-  <option value="Low">Low</option>
-  <option value="Medium">Medium</option>
-  <option value="High">High</option>
-</select>
+  <!-- ISSUE TYPE -->
+  <div class="input-wrapper">
+    <select id="issueType" required>
+      <option value="" disabled selected></option>
+      <option value="Erosion">Erosion</option>
+      <option value="Blowdown">Blowdown / Fallen Tree</option>
+      <option value="Invasives">Invasive Plants</option>
+      <option value="Drainage">Drainage / Water Issue</option>
+      <option value="Safety">Safety Hazard</option>
+      <option value="Other">Other</option>
+    </select>
+    <label for="issueType">Issue Type</label>
+  </div>
+  <div class="hintRow">
+    <p id="issueTypeHint" class="fieldHint required">* Required</p>
+    <p class="formHelpText">What type of issue are you reporting?</p>
+  </div>
 
-<label for="description">Description (optional)</label>
-<textarea id="description" rows="3"></textarea>
+  <!-- SEVERITY -->
+  <div class="input-wrapper">
+    <select id="severity">
+      <option value="" disabled selected></option>
+      <option value="Low">Low</option>
+      <option value="Medium">Medium</option>
+      <option value="High">High</option>
+    </select>
+    <label for="severity">Severity</label>
+  </div>
+  <div class="hintRow">
+    <p id="severityHint" class="fieldHint required">* Required</p>
+    <p class="formHelpText">What is the severity of the issue?</p>
+  </div>
 
-<label for="photo">Upload Photo (optional)</label>
-<input type="file" id="photo" accept="image/*">
+  <!-- DESCRIPTION -->
+  <div class="input-wrapper">
+    <textarea id="description" rows="3" required></textarea>
+    <label for="description">Description of issue</label>
+  </div>
+  <div class="hintRow">
+    <p id="severityHint" class="fieldHint required">* Required</p>
+  </div>
 
+  <!-- PHOTO UPLOAD -->
+  <div class="input-wrapper file-wrapper">
+    <label for="photo" class="file-label"></label>
+    <div class="file-row">
+      <button type="button" id="fakeFileBtn">Choose file</button>
+      <span id="fileName">No file chosen</span>
+    </div>
+    <input type="file" id="photo" accept="image/*">
+  </div>
+  <p class="fieldHint optional">Optional</p>
 
-<button onclick="submitIssue()">SUBMIT ISSUE</button>
+  <img id="photoPreview" class="hidden" />
+
+  <button id="submitBtn" disabled>SUBMIT ISSUE</button>
+
+  <div id="statusMessage" class="status hidden"></div>
+
+</div>
+
+<!-- SUCCESS TOAST -->
+<div id="successToast" class="toast hidden">
+  <div class="toast-inner">
+    <div class="toast-icon">✔</div>
+    <div class="toast-text">
+      <strong>Thank you!</strong>
+      <p>Your report has been submitted.</p>
+    </div>
+    <button id="newReportBtn" class="toast-btn">Submit another</button>
+  </div>
+</div>
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <!-- Site configuration -->
 <script src="sites.js"></script>
-
-<script>
-let map;
-let marker = null;
-
-const POWER_AUTOMATE_URL = "https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7823418fc89b4417928398e5c3fee82b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=GEAypdes3LSTSZEm39ASOMtQH1isZ3x95j-_fppaBcc";
-
-async function sendToPowerAutomate(data) {
-  console.log("sendToPowerAutomate() called", data);
-
-  try {
-    const response = await fetch(POWER_AUTOMATE_URL, {
-      method: "POST",
-      mode: "cors",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) {
-      throw new Error("Submission failed");
-    }
-
-    alert("Issue submitted successfully!");
-  } catch (err) {
-    console.error("Power Automate error:", err);
-    alert("Error submitting issue.");
-  }
-}
-
-
-const intakeMode = "console";
-
-const siteSelect = document.getElementById("siteSelect");
-
-// Populate site dropdown
-Object.keys(sites).forEach(site => {
-  const opt = document.createElement("option");
-  opt.value = site;
-  opt.textContent = site;
-  siteSelect.appendChild(opt);
-});
-siteSelect.selectedIndex = 0;
-
-
-// Initialize map
-let boundaryLayer = null;
-let boundaryShadowLayer = null;
-
-async function applySiteBoundary(site) {
-  // Remove existing layers
-  if (boundaryLayer) {
-    map.removeLayer(boundaryLayer);
-    boundaryLayer = null;
-  }
-  if (boundaryShadowLayer) {
-    map.removeLayer(boundaryShadowLayer);
-    boundaryShadowLayer = null;
-  }
-
-  if (!site || !site.boundary) return;
-
-  try {
-    const response = await fetch(site.boundary);
-    const geojson = await response.json();
-
-    // 🟢 Shadow / glow layer (drawn first, underneath)
-    boundaryShadowLayer = L.geoJSON(geojson, {
-      style: {
-        color: "#C4D600",   // light green glow
-        weight: 8,          // thicker than main boundary
-        opacity: 0.6,
-        fillOpacity: 0
-      }
-    }).addTo(map);
-
-    // 🟢 Main boundary (drawn on top)
-    boundaryLayer = L.geoJSON(geojson, {
-      style: {
-        color: "#569602",   // main boundary color
-        weight: 3,
-        fillOpacity: 0.1
-      }
-    }).addTo(map);
-
-    map.fitBounds(boundaryLayer.getBounds());
-
-  } catch (err) {
-    console.error("Failed to load boundary:", err);
-  }
-}
-
-// Initialize map
-const firstSite = sites[siteSelect.value];
-
-map = L.map('map').setView(firstSite.center, firstSite.zoom);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-
-applySiteBoundary(firstSite);
-// Handle map clicks
-map.on('click', function(e) {
-  if (marker) {
-    map.removeLayer(marker);
-  }
-  marker = L.marker(e.latlng).addTo(map);
-});
-
-// Change site → recenter map
-siteSelect.addEventListener('change', () => {
-  const site = sites[siteSelect.value];
-  map.setView(site.center, site.zoom);
-  applySiteBoundary(site);
-  if (marker) {
-    map.removeLayer(marker);
-    marker = null;
-  }
-});
-
-// Convert file to Base64
-function toBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsArrayBuffer(file); // read as raw binary, not DataURL
-    reader.onload = () => {
-      // Convert to base64 manually
-      const bytes = new Uint8Array(reader.result);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      resolve(btoa(binary));
-    };
-    reader.onerror = reject;
-  });
-}
-
-
-
-async function submitIssue() {
-  if (!marker) {
-    alert("Please tap the map to mark the issue location.");
-    return;
-  }
-
-  const photoInput = document.getElementById("photo");
-  const file = photoInput.files[0];
-
-  let photoBase64 = null;
-  let photoBase64Name = null;
-
-  if (file) {
-    try {
-      photoBase64 = await toBase64(file);
-      photoBase64Name = file.name;  // preserve original filename
-    } catch (err) {
-      console.error("Failed to convert photo:", err);
-      alert("Photo conversion failed.");
-      return;
-    }
-  }
-
-  // Build payload
-  const payload = {
-    site: siteSelect.value,
-    issueType: document.getElementById("issueType").value,
-    severity: document.getElementById("severity").value,
-    latitude: marker.getLatLng().lat,
-    longitude: marker.getLatLng().lng,
-    description: document.getElementById("description").value,
-    submittedAt: new Date().toISOString(),
-    photoBase64: photoBase64,          // optional
-    photoBase64Name: photoBase64Name   // optional
-  };
-
-  try {
-    // Send to Power Automate
-    const response = await fetch(POWER_AUTOMATE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) throw new Error("Submission failed");
-
-    alert("Issue submitted successfully!");
-
-    // Reset form
-    if (marker) map.removeLayer(marker);
-    marker = null;
-    document.getElementById("description").value = "";
-    photoInput.value = "";
-  } catch (err) {
-    console.error(err);
-    alert("Error submitting issue.");
-  }
-}
-
-</script>
+<script src="app.js"></script>
 
 </body>
 </html>

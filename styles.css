@@ -26,37 +26,255 @@ h2 {
     text-align: center;
 }
 
-label {
-    font-weight: bold;
-    display: block;
-    margin-top: 12px;
+/* ---------- FORM ---------- */
+.form {
+  max-width: 480px;
+  margin: 0 auto;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-select, textarea, button {
-    width: 100%;
-    padding: 8px;
-    margin-top: 4px;
+/* ---------- INPUT WRAPPER ---------- */
+.input-wrapper {
+  position: relative;
+  margin-top: 24px;
 }
 
+/* underline */
+.input-wrapper::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 0;
+  background: #c4d600;
+  transition: height 0.3s cubic-bezier(.25,.46,.45,.94);
+}
+
+/* default input */
+.input-wrapper input,
+.input-wrapper select,
+.input-wrapper textarea {
+  width: 100%;
+  padding: 18px 10px 4px;
+  font-size: 18px;
+  line-height: 18px;
+
+  background: #fff;
+  border: none;
+  border-bottom: 1px solid #373d39;
+  border-radius: 0;
+
+  color: #373d39;
+  caret-color: #53565a;
+
+  appearance: none;
+}
+
+.input-wrapper textarea {
+  resize: vertical;
+  min-height: 60px;
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.input-wrapper label {
+  position: absolute;
+  left: 10px;
+  top: 14px;
+
+  font-size: 18px;
+  line-height: 15px;
+  color: #a7a8aa;
+
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(.25,.46,.45,.94);
+}
+
+.input-wrapper.focussed::after {
+  height: 2px;
+}
+
+.input-wrapper.focussed label,
+.input-wrapper.filled label {
+  font-size: 10px;
+  line-height: 11px;
+  top: 4px;
+}
+
+/* ---------- MAP ---------- */
 #map {
-    height: 350px;
-    margin: 12px 0;
-    border: 1px solid #ccc;
+  height: 350px;
+  margin: 12px 0;
+  border: 1px solid #ccc;
 }
 
-button {
-    background-color: #569602;
-    color: white;
-    border: none;
-    font-size: 18px;
-    cursor: pointer;
-    border-radius: 40px;
-    margin-top: 30px;
-    height: 50px;
-    font-weight: 600;
-    letter-spacing: .15em;
+/* ---------- HINT ---------- */
+.map-hint {
+  margin-top: 8px;
+  font-size: 14px;
+  color: #6b6b6b;
+}
+.map-hint.hidden {
+  display: none;
 }
 
-button:hover {
-    background-color: #2c5234;
+.fieldHint {
+  font-size: 14px;
+  color: #6b6b6b;
+  margin: 0;
+  margin-top: 0px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fieldHint.required {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.fieldHint.optional {
+  color: #6b6b6b;
+}
+
+.hintIcon {
+  font-size: 14px;
+  display: inline-block;
+}
+
+.hintRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.formHelpText {
+  color: #a7a8aa;
+  font-style: italic;
+  font-size: 14px;
+  margin: 0px;
+  text-align: right;
+}
+
+.hintHidden {
+  visibility: hidden;
+}
+
+/* ---------- PHOTO UPLOAD ---------- */
+.file-wrapper input[type="file"] {
+  display: none;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-row button {
+  padding: 10px 14px;
+  background: #373d39;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.file-row button:hover {
+  background: #1f2424;
+}
+
+.file-row button:active {
+  transform: translateY(1px);
+}
+
+.file-row button:focus {
+  outline: 2px solid #c4d600;
+  outline-offset: 2px;
+}
+
+.file-row span {
+  font-size: 14px;
+  color: #6b6b6b;
+}
+
+/* ---------- SUBMIT BUTTON ---------- */
+button#submitBtn {
+  margin-top: 32px;
+  padding: 14px 18px;
+  width: 100%;
+  background: #373d39;
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+
+button#submitBtn:hover:not(:disabled) {
+  background: #000;
+}
+
+button#submitBtn:disabled {
+  background: #ccc;
+  color: #666;
+}
+
+/* ---------- STATUS ---------- */
+.status {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.status.success {
+  background: #e6f4ea;
+  color: #1e7f43;
+}
+
+.status.error {
+  background: #fdecea;
+  color: #b42318;
+}
+
+/* ---------- PHOTO PREVIEW ---------- */
+#photoPreview {
+  max-width: 100%;
+  max-height: 200px;
+  margin-top: 10px;
+  border-radius: 6px;
+}
+
+/* ---------- TOAST ---------- */
+.toast {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  width: 320px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.35s ease;
+  z-index: 9999;
+}
+
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.hidden {
+  display: none;
 }
