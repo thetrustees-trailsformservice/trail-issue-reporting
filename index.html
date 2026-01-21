@@ -24,14 +24,15 @@
     <label for="siteSelect">Choose a site</label>
   </div>
   <div class="hintRow">
-    <p id="siteHint" class="fieldHint required">* Required</p>
+    <p id="siteHint" class="fieldHint required" data-for="siteSelect">* Required</p>
     <p class="formHelpText">Which site are you reporting for?</p>
   </div>
 
   <!-- MAP -->
   <div id="map"></div>
+
   <div class="hintRow">
-    <p class="fieldHint required">* Required</p>
+    <p id="mapRequired" class="fieldHint required">* Required</p>
     <p class="formHelpText">Click the map to mark the issue location.</p>
   </div>
 
@@ -49,7 +50,7 @@
     <label for="issueType">Issue Type</label>
   </div>
   <div class="hintRow">
-    <p id="issueTypeHint" class="fieldHint required">* Required</p>
+    <p id="issueTypeHint" class="fieldHint required" data-for="issueType">* Required</p>
     <p class="formHelpText">What type of issue are you reporting?</p>
   </div>
 
@@ -64,7 +65,7 @@
     <label for="severity">Severity</label>
   </div>
   <div class="hintRow">
-    <p id="severityHint" class="fieldHint required">* Required</p>
+    <p id="severityHint" class="fieldHint required" data-for="severity">* Required</p>
     <p class="formHelpText">What is the severity of the issue?</p>
   </div>
 
@@ -74,7 +75,7 @@
     <label for="description">Description of issue</label>
   </div>
   <div class="hintRow">
-    <p id="severityHint" class="fieldHint required">* Required</p>
+    <p id="severityHint" class="fieldHint required" data-for="description">* Required</p>
   </div>
 
   <!-- PHOTO UPLOAD -->

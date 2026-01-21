@@ -71,11 +71,22 @@ function resetForm() {
 
   mapHint.classList.remove("hidden");
   clearStatus();
+
+  updateMapRequiredState();
 }
 
 function updateSubmitState() {
   submitBtn.disabled = !marker || !document.getElementById("issueType").value;
 }
+
+function updateMapRequiredState() {
+  const mapRequired = document.getElementById("mapRequired");
+  if (!mapRequired) return;
+
+  const hasMarker = !!marker;
+  mapRequired.classList.toggle("hintHidden", hasMarker);
+}
+
 
 // ========================
 // SITE DROPDOWN
@@ -102,11 +113,15 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 // ========================
 map.on("click", e => {
   if (marker) map.removeLayer(marker);
+
   marker = L.marker(e.latlng).addTo(map);
 
-  mapHint.classList.add("hidden");
+  document.getElementById("mapHint")?.classList.add("hidden");
+
+  updateMapRequiredState();
   updateSubmitState();
 });
+
 
 siteSelect.addEventListener("change", () => {
   const site = sites[siteSelect.value];
@@ -118,6 +133,7 @@ siteSelect.addEventListener("change", () => {
     marker = null;
   }
 
+  updateMapRequiredState();
   updateSubmitState();
 });
 
@@ -198,17 +214,44 @@ function initFloatingLabels() {
   document.querySelectorAll(".input-wrapper input, .input-wrapper textarea, .input-wrapper select")
     .forEach(el => {
       const wrapper = el.closest(".input-wrapper");
+      const requiredHint = document.querySelector(
+        `.fieldHint.required[data-for="${el.id}"]`
+      );
 
-      el.addEventListener("focus", () => wrapper.classList.add("focussed"));
+      function hasValue() {
+        if (el.tagName === "SELECT") {
+          return el.value !== "";
+        }
+        return el.value.trim().length > 0;
+      }
+
+      function updateState() {
+        const filled = hasValue();
+
+        wrapper.classList.toggle("filled", filled);
+
+        if (requiredHint) {
+          requiredHint.classList.toggle("hintHidden", filled);
+        }
+      }
+
+      el.addEventListener("focus", () => {
+        wrapper.classList.add("focussed");
+      });
 
       el.addEventListener("blur", () => {
         wrapper.classList.remove("focussed");
-        if (el.value) wrapper.classList.add("filled");
-        else wrapper.classList.remove("filled");
+        updateState();
       });
 
-      if (el.value) wrapper.classList.add("filled");
+      el.addEventListener("input", updateState);
+      el.addEventListener("change", updateState);
+
+      // Initialize
+      updateState();
     });
+
+
 }
 
 initFloatingLabels();
