@@ -1,3 +1,4 @@
+document.addEventListener("DOMContentLoaded", () => {
 // ========================
 // CONFIG
 // ========================
@@ -21,7 +22,9 @@ const submitBtn = document.getElementById("submitBtn");
 const statusMessage = document.getElementById("statusMessage");
 const photoInput = document.getElementById("photo");
 const photoPreview = document.getElementById("photoPreview");
-
+const issueType = document.getElementById("issueType");
+const severity = document.getElementById("severity");
+const description = document.getElementById("description");
 const fakeFileBtn = document.getElementById("fakeFileBtn");
 const fileNameEl = document.getElementById("fileName");
 const mapHint = document.getElementById("mapHint");
@@ -29,55 +32,101 @@ const mapHint = document.getElementById("mapHint");
 submitBtn.disabled = true;
 
 // ========================
+// SUBMIT BUTTON CLICK
+// ========================
+submitBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  submitIssue();
+});
+
+// ========================
 // STATUS HELPERS
 // ========================
 function showStatus(message, type) {
+  if (!statusMessage) return;
   statusMessage.textContent = message;
   statusMessage.className = `status ${type}`;
   statusMessage.classList.remove("hidden");
 }
 
 function clearStatus() {
+  if (!statusMessage) return;
   statusMessage.className = "status hidden";
   statusMessage.textContent = "";
 }
 
 function showSuccessToast() {
   const toast = document.getElementById("successToast");
+  if (!toast) return;
   toast.classList.add("show");
   toast.classList.remove("hidden");
 }
 
 function hideSuccessToast() {
   const toast = document.getElementById("successToast");
+  if (!toast) return;
   toast.classList.remove("show");
   toast.classList.add("hidden");
 }
+
+function refreshFieldStates() {
+  document.querySelectorAll(".input-wrapper input, .input-wrapper textarea, .input-wrapper select")
+    .forEach(el => {
+      const wrapper = el.closest(".input-wrapper");
+      const requiredHint = document.querySelector(`.fieldHint.required[data-for="${el.id}"]`);
+      const filled = el.value.trim().length > 0;
+
+      wrapper?.classList.toggle("filled", filled);
+      requiredHint?.classList.toggle("hintHidden", filled);
+    });
+
+  updateMapRequiredState();
+}
+
 
 function resetForm() {
   if (marker) map.removeLayer(marker);
   marker = null;
 
-  document.getElementById("description").value = "";
+  description.value = "";
   photoInput.value = "";
   photoPreview.classList.add("hidden");
 
   // reset submit button state
   submitBtn.disabled = true;
   siteSelect.value = "";
-  document.getElementById("issueType").value = "";
-  document.getElementById("severity").value = "Low";
+  issueType.value = "";
+  severity.value = "";
   map.setView([42.3, -71.8], 8);
 
-  mapHint.classList.remove("hidden");
+  const mapHintEl = document.getElementById("mapHint");
+  if (mapHintEl) mapHintEl.classList.remove("hidden");
+
   clearStatus();
 
   updateMapRequiredState();
+  updateSubmitState();
+
+  refreshFieldStates();
 }
 
 function updateSubmitState() {
-  submitBtn.disabled = !marker || !document.getElementById("issueType").value;
+  const hasMarker = !!marker;
+
+  submitBtn.disabled = !(
+    siteSelect.value &&
+    issueType.value &&
+    severity.value &&
+    description.value.trim() &&
+    hasMarker
+  );
 }
+
+// REQUIRED FIELD LISTENERS
+siteSelect.addEventListener("change", updateSubmitState);
+issueType.addEventListener("change", updateSubmitState);
+severity.addEventListener("change", updateSubmitState);
+description.addEventListener("input", updateSubmitState);
 
 function updateMapRequiredState() {
   const mapRequired = document.getElementById("mapRequired");
@@ -265,6 +314,10 @@ function initHintVisibility() {
   ];
 
   requiredFields.forEach(item => {
+
+    // SAFETY CHECK
+    if (!item.el || !item.hint) return;
+
     const check = () => {
       if (item.el.value) item.hint.classList.add("hintHidden");
       else item.hint.classList.remove("hintHidden");
@@ -275,6 +328,7 @@ function initHintVisibility() {
     check();
   });
 }
+
 
 initHintVisibility();
 
@@ -319,11 +373,15 @@ async function submitIssue() {
   };
 
   try {
-    await fetch(POWER_AUTOMATE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+  const response = await fetch(POWER_AUTOMATE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
 
     showSuccessToast();
     resetForm();
@@ -342,20 +400,15 @@ async function submitIssue() {
 }
 
 // ========================
-// SUBMIT BUTTON CLICK
-// ========================
-submitBtn.addEventListener("click", (e) => {
-  e.preventDefault();
-  submitIssue();
-});
-
-// ========================
 // TOAST HANDLING
 // ========================
 const successToast = document.getElementById("successToast");
 const newReportBtn = document.getElementById("newReportBtn");
 
-newReportBtn.addEventListener("click", () => {
-  resetForm();
-  hideSuccessToast();
+if (newReportBtn) {
+  newReportBtn.addEventListener("click", () => {
+    resetForm();
+    hideSuccessToast();
+  });
+}
 });
