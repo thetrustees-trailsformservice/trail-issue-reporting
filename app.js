@@ -13,6 +13,7 @@ let marker = null;
 let boundaryLayer = null;
 let boundaryShadowLayer = null;
 let isSubmitting = false;
+let trailsLayer = null;
 
 // ========================
 // ELEMENTS
@@ -176,6 +177,7 @@ siteSelect.addEventListener("change", () => {
   const site = sites[siteSelect.value];
   map.setView(site.center, site.zoom);
   applySiteBoundary(site);
+  applySiteTrails(site);
 
   if (marker) {
     map.removeLayer(marker);
@@ -185,6 +187,39 @@ siteSelect.addEventListener("change", () => {
   updateMapRequiredState();
   updateSubmitState();
 });
+
+// ========================
+// TRAILS
+// ========================
+async function applySiteTrails(site) {
+  if (trailsLayer) {
+    map.removeLayer(trailsLayer);
+    trailsLayer = null;
+  }
+
+  if (!site.trails) return;
+
+  try {
+    const res = await fetch(site.trails);
+    const geojson = await res.json();
+
+    trailsLayer = L.geoJSON(geojson, {
+      style: feature => ({
+        color: "#8B4513",
+        weight: 3,
+        opacity: 0.9
+      }),
+      onEachFeature: (feature, layer) => {
+        if (feature.properties?.name) {
+          layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
+        }
+      }
+    }).addTo(map);
+
+  } catch (err) {
+    console.error("Trail load failed", err);
+  }
+}
 
 // ========================
 // BOUNDARIES
