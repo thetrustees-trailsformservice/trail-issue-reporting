@@ -2,8 +2,14 @@ document.addEventListener("DOMContentLoaded", () => {
 // ========================
 // CONFIG
 // ========================
+const isFormPage = document.getElementById("submitBtn");
+const isIssuesPage = document.getElementById("issuesMap");
+
 const POWER_AUTOMATE_URL =
   "https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7823418fc89b4417928398e5c3fee82b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=GEAypdes3LSTSZEm39ASOMtQH1isZ3x95j-_fppaBcc";
+
+const ISSUES_GEOJSON_URL =
+  "https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/d05f1cd01f824e8a86771bfe1e69ba1c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=o6rqskcqxVZdNtyo5Wj_-FL0W97sT9WPmQN_BZXO2rs";
 
 // ========================
 // GLOBALS
@@ -14,7 +20,12 @@ let boundaryLayer = null;
 let boundaryShadowLayer = null;
 let isSubmitting = false;
 let trailsLayer = null;
+let issuesLayer = null;
 
+/* =========================================================
+   ===================== FORM PAGE =========================
+   ========================================================= */
+if (isFormPage) {
 // ========================
 // ELEMENTS
 // ========================
@@ -455,4 +466,144 @@ if (newReportBtn) {
     hideSuccessToast();
   });
 }
-});
+
+}
+
+/* =========================================================
+   ==================== ISSUES PAGE ========================
+   ========================================================= */
+if (isIssuesPage) {
+// ========================
+// ISSUES MAP
+// ========================
+function initIssuesMap() {
+  console.log("initIssuesMap fired");
+  const map = L.map("issuesMap").setView([42.3, -71.8], 10);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+
+  return map;
+}
+
+function getSeverityColor(severity) {
+  if (!severity) return "#999";
+
+  const s = severity.trim();
+  if (s === "High") return "#d73027";
+  if (s === "Medium") return "#fc8d59";
+  if (s === "Low") return "#91cf60";
+  return "#999";
+}
+
+async function loadIssues(map) {
+  const geojson = await fetchOpenIssues();
+  if (!geojson) return;
+
+  if (issuesLayer) {
+    map.removeLayer(issuesLayer);
+  }
+
+  issuesLayer = L.geoJSON(geojson, {
+  pointToLayer: (feature, latlng) => {
+  const fill = getSeverityColor(feature.properties.severity);
+
+  return L.circleMarker(latlng, {
+    radius: 8,
+    color: "#333",
+    weight: 1,
+    fillColor: fill,
+    fillOpacity: 0.85
+  });
+},
+
+  onEachFeature: (feature, layer) => {
+  const p = feature.properties;
+  const severityColor = getSeverityColor(p.severity);
+
+  const sharepointUrl =
+    `https://thetrustees.sharepoint.com/sites/SouthShoreRegionVolunteers/Lists/Trail%20Monitoring%20Reports/DispForm.aspx?ID=${p.id}`;
+
+  layer.bindPopup(`
+    <strong>${p.issueType}</strong><br>
+    Site: ${p.site}<br>
+    Severity: <strong style="color:${severityColor}">
+      ${p.severity}
+    </strong><br>
+    Status: ${p.status}<br>
+    Description: ${p.description || "No description"}<br>
+    <a href="${sharepointUrl}" target="_blank">View in SharePoint</a><br>
+    <button onclick="markCompleted(${p.id}, this)">Mark Completed</button>
+  `);
+}
+
+}).addTo(map);
+}
+
+async function fetchOpenIssues() {
+  try {
+    const res = await fetch(ISSUES_GEOJSON_URL);
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const json = await res.json();
+
+    // Check for data property
+    if (!json?.data || !json.data.features) {
+      console.warn("No issues returned or invalid GeoJSON. Falling back to empty FeatureCollection.");
+      return { type: "FeatureCollection", features: [] };
+    }
+
+    return json.data; // Leaflet expects FeatureCollection
+  } catch (err) {
+    console.error("Failed to load issues", err);
+    return { type: "FeatureCollection", features: [] }; // prevent map crash
+  }
+}
+
+async function markCompleted(id, button) {
+  try {
+    button.disabled = true;
+    button.textContent = "Updating…";
+
+    const res = await fetch("https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5b136aad51c94c51a010f2dc4e6ed490/triggers/manual/paths/invoke?api-version=1", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ID: id })
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    // Remove the marker from the map
+    const popup = button.closest(".leaflet-popup-content");
+    const markerLayerId = popup._leaflet_id;
+
+    issuesLayer.eachLayer(layer => {
+      if (layer._leaflet_id === markerLayerId) {
+        issuesLayer.removeLayer(layer);
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to mark completed. Please try again.");
+    button.disabled = false;
+    button.textContent = "Mark Completed";
+  }
+}
+
+if (document.getElementById("issuesMap")) {
+  const issuesMap = initIssuesMap();
+  loadIssues(issuesMap);
+
+  setInterval(() => {
+    loadIssues(issuesMap);
+  }, 60000);
+}
+}
+
+})
