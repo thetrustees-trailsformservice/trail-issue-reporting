@@ -151,7 +151,13 @@ Object.keys(sites).forEach(site => {
 // ========================
 // MAP INIT
 // ========================
-map = L.map("map").setView([42.3, -71.8], 8);
+map = L.map("map").setView([41.8029231, -70.6108888], 8);
+
+map.createPane("boundaryPane");
+map.getPane("boundaryPane").style.zIndex = 400;
+
+map.createPane("trailsPane");
+map.getPane("trailsPane").style.zIndex = 500;
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom: 19,
@@ -204,6 +210,7 @@ async function applySiteTrails(site) {
     const geojson = await res.json();
 
     trailsLayer = L.geoJSON(geojson, {
+      pane: "trailsPane",
       style: feature => ({
         color: "#8B4513",
         weight: 3,
@@ -235,10 +242,12 @@ async function applySiteBoundary(site) {
     const geojson = await res.json();
 
     boundaryShadowLayer = L.geoJSON(geojson, {
+      pane: "boundaryPane",
       style: { color: "#C4D600", weight: 8, opacity: 0.6, fillOpacity: 0 }
     }).addTo(map);
 
     boundaryLayer = L.geoJSON(geojson, {
+      pane: "boundaryPane",
       style: { color: "#569602", weight: 3, fillOpacity: 0.1 }
     }).addTo(map);
 
