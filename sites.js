@@ -1,7 +1,7 @@
 // Configuration file for monitoring sites
 // Each site has a center point and default zoom
 
-const sites = {
+window.sites = {
   "Armstrong-Kelley Park": {
     center: [41.62920684379889, -70.38081967178935],
     zoom: 17,

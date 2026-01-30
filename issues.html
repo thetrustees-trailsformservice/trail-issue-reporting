@@ -14,12 +14,17 @@
 
 <body>
   <h1>Open Trail Issues</h1>
+  
+  <label for="siteFilter">Filter by Site:</label>
+  <select id="siteFilter">
+    <option value="">All Sites</option>
+  </select>
 
   <div id="issuesMap"></div>
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+  <script src="sites.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

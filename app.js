@@ -2,8 +2,8 @@ document.addEventListener("DOMContentLoaded", () => {
 // ========================
 // CONFIG
 // ========================
-const isFormPage = document.getElementById("submitBtn");
-const isIssuesPage = document.getElementById("issuesMap");
+const isFormPage = !!document.getElementById("map");
+const isIssuesPage = !!document.getElementById("issuesMap");
 
 const POWER_AUTOMATE_URL =
   "https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7823418fc89b4417928398e5c3fee82b/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=GEAypdes3LSTSZEm39ASOMtQH1isZ3x95j-_fppaBcc";
@@ -21,6 +21,95 @@ let boundaryShadowLayer = null;
 let isSubmitting = false;
 let trailsLayer = null;
 let issuesLayer = null;
+
+function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
+  const container = L.DomUtil.get(mapId);
+
+  if (container && container._leaflet_id) {
+    return map; // already initialized
+  }
+  
+  map = L.map(mapId).setView(center, zoom);
+
+  map.createPane("boundaryPane");
+  map.getPane("boundaryPane").style.zIndex = 400;
+
+  map.createPane("trailsPane");
+  map.getPane("trailsPane").style.zIndex = 450;
+
+  map.createPane("issuesPane");
+  map.getPane("issuesPane").style.zIndex = 500;
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+
+  return map;
+}
+
+function clearSiteOverlays() {
+  [boundaryLayer, boundaryShadowLayer, trailsLayer].forEach(layer => {
+    if (layer) map.removeLayer(layer);
+  });
+}
+
+async function loadSiteBoundary(site, doZoom = true) {
+  if (!site?.boundary) return;
+
+  const geojson = await fetch(site.boundary).then(r => r.json());
+
+  boundaryShadowLayer = L.geoJSON(geojson, {
+    pane: "boundaryPane",
+    style: { color: "#C4D600", weight: 8, opacity: 0.6, fillOpacity: 0 }
+  }).addTo(map);
+
+  boundaryLayer = L.geoJSON(geojson, {
+    pane: "boundaryPane",
+    style: { color: "#4B6F44", weight: 3, fillOpacity: 0.1 }
+  }).addTo(map);
+
+  if (doZoom) {
+    const bounds = boundaryLayer.getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
+  }
+}
+
+async function loadSiteTrails(site) {
+  if (!site?.trails) return;
+
+  const geojson = await fetch(site.trails).then(r => r.json());
+
+  trailsLayer = L.geoJSON(geojson, {
+    pane: "trailsPane",
+    style: { color: "#8B5A2B", weight: 3, opacity: 0.9 }
+  }).addTo(map);
+}
+
+function zoomToAllSites() {
+  const layers = [];
+
+  Object.values(sites).forEach(site => {
+    if (site.boundary) {
+      layers.push(
+        fetch(site.boundary)
+          .then(r => r.json())
+          .then(g => L.geoJSON(g))
+      );
+    }
+  });
+
+  Promise.all(layers).then(geoLayers => {
+    const group = L.featureGroup(geoLayers);
+    const bounds = group.getBounds();
+
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+  });
+}
 
 /* =========================================================
    ===================== FORM PAGE =========================
@@ -109,7 +198,7 @@ function resetForm() {
   siteSelect.value = "";
   issueType.value = "";
   severity.value = "";
-  map.setView([42.3, -71.8], 8);
+  map.setView([41.8029231, -70.6108888], 8);
 
   const mapHintEl = document.getElementById("mapHint");
   if (mapHintEl) mapHintEl.classList.remove("hidden");
@@ -133,6 +222,26 @@ function updateSubmitState() {
     hasMarker
   );
 }
+
+map = initBaseMap("map", [41.8029231, -70.6108888], 8);
+
+siteSelect.addEventListener("change", async () => {
+  const site = sites[siteSelect.value];
+  if (!site) return;
+
+  clearSiteOverlays();
+  await loadSiteBoundary(site, true);
+  await loadSiteTrails(site);
+
+  if (marker) {
+    map.removeLayer(marker);
+    marker = null;
+  }
+
+  updateMapRequiredState();
+  updateSubmitState();
+});
+
 
 // REQUIRED FIELD LISTENERS
 siteSelect.addEventListener("change", updateSubmitState);
@@ -162,18 +271,7 @@ Object.keys(sites).forEach(site => {
 // ========================
 // MAP INIT
 // ========================
-map = L.map("map").setView([41.8029231, -70.6108888], 8);
-
-map.createPane("boundaryPane");
-map.getPane("boundaryPane").style.zIndex = 400;
-
-map.createPane("trailsPane");
-map.getPane("trailsPane").style.zIndex = 500;
-
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: "&copy; OpenStreetMap contributors"
-}).addTo(map);
+map = initBaseMap("map", [41.8029231, -70.6108888], 8);
 
 // ========================
 // MAP EVENTS
@@ -188,85 +286,6 @@ map.on("click", e => {
   updateMapRequiredState();
   updateSubmitState();
 });
-
-
-siteSelect.addEventListener("change", () => {
-  const site = sites[siteSelect.value];
-  map.setView(site.center, site.zoom);
-  applySiteBoundary(site);
-  applySiteTrails(site);
-
-  if (marker) {
-    map.removeLayer(marker);
-    marker = null;
-  }
-
-  updateMapRequiredState();
-  updateSubmitState();
-});
-
-// ========================
-// TRAILS
-// ========================
-async function applySiteTrails(site) {
-  if (trailsLayer) {
-    map.removeLayer(trailsLayer);
-    trailsLayer = null;
-  }
-
-  if (!site.trails) return;
-
-  try {
-    const res = await fetch(site.trails);
-    const geojson = await res.json();
-
-    trailsLayer = L.geoJSON(geojson, {
-      pane: "trailsPane",
-      style: feature => ({
-        color: "#8B4513",
-        weight: 3,
-        opacity: 0.9
-      }),
-      onEachFeature: (feature, layer) => {
-        if (feature.properties?.name) {
-          layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
-        }
-      }
-    }).addTo(map);
-
-  } catch (err) {
-    console.error("Trail load failed", err);
-  }
-}
-
-// ========================
-// BOUNDARIES
-// ========================
-async function applySiteBoundary(site) {
-  if (boundaryLayer) map.removeLayer(boundaryLayer);
-  if (boundaryShadowLayer) map.removeLayer(boundaryShadowLayer);
-
-  if (!site.boundary) return;
-
-  try {
-    const res = await fetch(site.boundary);
-    const geojson = await res.json();
-
-    boundaryShadowLayer = L.geoJSON(geojson, {
-      pane: "boundaryPane",
-      style: { color: "#C4D600", weight: 8, opacity: 0.6, fillOpacity: 0 }
-    }).addTo(map);
-
-    boundaryLayer = L.geoJSON(geojson, {
-      pane: "boundaryPane",
-      style: { color: "#569602", weight: 3, fillOpacity: 0.1 }
-    }).addTo(map);
-
-    map.fitBounds(boundaryLayer.getBounds());
-  } catch (err) {
-    console.error("Boundary load failed", err);
-  }
-}
 
 // ========================
 // PHOTO PREVIEW
@@ -476,17 +495,6 @@ if (isIssuesPage) {
 // ========================
 // ISSUES MAP
 // ========================
-function initIssuesMap() {
-  console.log("initIssuesMap fired");
-  const map = L.map("issuesMap").setView([42.3, -71.8], 10);
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(map);
-
-  return map;
-}
 
 function getSeverityColor(severity) {
   if (!severity) return "#999";
@@ -497,6 +505,9 @@ function getSeverityColor(severity) {
   if (s === "Low") return "#91cf60";
   return "#999";
 }
+
+map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
+loadIssues(map);
 
 async function loadIssues(map) {
   const geojson = await fetchOpenIssues();
@@ -596,14 +607,55 @@ async function markCompleted(id, button) {
   }
 }
 
-if (document.getElementById("issuesMap")) {
-  const issuesMap = initIssuesMap();
-  loadIssues(issuesMap);
+const siteFilter = document.getElementById("siteFilter");
 
-  setInterval(() => {
-    loadIssues(issuesMap);
-  }, 60000);
+Object.keys(sites).forEach(siteName => {
+  const opt = document.createElement("option");
+  opt.value = siteName;
+  opt.textContent = siteName;
+  siteFilter.appendChild(opt);
+});
+
+siteFilter.addEventListener("change", async () => {
+  const selected = siteFilter.value;
+
+  clearSiteOverlays();
+
+  if (!selected) {
+    zoomToAllSites();
+
+    issuesLayer.eachLayer(layer => {
+      layer.setStyle({ opacity: 1, fillOpacity: 0.85 });
+    });
+
+    return;
+  }
+
+  const site = sites[selected];
+  if (!site) return;
+
+  await loadSiteBoundary(site, true);
+  await loadSiteTrails(site);
+
+  issuesLayer.eachLayer(layer => {
+    const match = layer.feature.properties.site === selected;
+    layer.setStyle({
+      opacity: match ? 1 : 0,
+      fillOpacity: match ? 0.85 : 0
+    });
+    if (!match) layer.closePopup();
+  });
+});
+
+
+map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
+loadIssues(map);
+
+setInterval(() => {
+  loadIssues(map);
+}, 60000);
+
 }
-}
+
 
 })
