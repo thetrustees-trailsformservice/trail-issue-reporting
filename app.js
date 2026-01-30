@@ -24,10 +24,7 @@ let issuesLayer = null;
 
 function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
   const container = L.DomUtil.get(mapId);
-
-  if (container && container._leaflet_id) {
-    return map; // already initialized
-  }
+  if (container && container._leaflet_id) return map;
   
   map = L.map(mapId).setView(center, zoom);
 
@@ -38,7 +35,8 @@ function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
   map.getPane("trailsPane").style.zIndex = 450;
 
   map.createPane("issuesPane");
-  map.getPane("issuesPane").style.zIndex = 500;
+  map.getPane("issuesPane").style.zIndex = 600;
+  map.getPane("issuesPane").style.pointerEvents = "auto";
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -222,8 +220,6 @@ function updateSubmitState() {
     hasMarker
   );
 }
-
-map = initBaseMap("map", [41.8029231, -70.6108888], 8);
 
 siteSelect.addEventListener("change", async () => {
   const site = sites[siteSelect.value];
@@ -492,170 +488,177 @@ if (newReportBtn) {
    ==================== ISSUES PAGE ========================
    ========================================================= */
 if (isIssuesPage) {
-// ========================
-// ISSUES MAP
-// ========================
 
-function getSeverityColor(severity) {
-  if (!severity) return "#999";
+  // ========================
+  // UTILITY
+  // ========================
+  function getSeverityColor(severity) {
+    if (!severity) return "#999";
 
-  const s = severity.trim();
-  if (s === "High") return "#d73027";
-  if (s === "Medium") return "#fc8d59";
-  if (s === "Low") return "#91cf60";
-  return "#999";
-}
-
-map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
-loadIssues(map);
-
-async function loadIssues(map) {
-  const geojson = await fetchOpenIssues();
-  if (!geojson) return;
-
-  if (issuesLayer) {
-    map.removeLayer(issuesLayer);
+    const s = severity.trim();
+    if (s === "High") return "#d73027";
+    if (s === "Medium") return "#fc8d59";
+    if (s === "Low") return "#91cf60";
+    return "#999";
   }
 
-  issuesLayer = L.geoJSON(geojson, {
-  pointToLayer: (feature, latlng) => {
-  const fill = getSeverityColor(feature.properties.severity);
+  // ========================
+  // INIT MAP
+  // ========================
+  map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
 
-  return L.circleMarker(latlng, {
-    radius: 8,
-    color: "#333",
-    weight: 1,
-    fillColor: fill,
-    fillOpacity: 0.85
-  });
-},
+  // ========================
+  // LOAD ISSUES
+  // ========================
+  async function loadIssues(map) {
+    const geojson = await fetchOpenIssues();
+    if (!geojson) return;
 
-  onEachFeature: (feature, layer) => {
-  const p = feature.properties;
-  const severityColor = getSeverityColor(p.severity);
-
-  const sharepointUrl =
-    `https://thetrustees.sharepoint.com/sites/SouthShoreRegionVolunteers/Lists/Trail%20Monitoring%20Reports/DispForm.aspx?ID=${p.id}`;
-
-  layer.bindPopup(`
-    <strong>${p.issueType}</strong><br>
-    Site: ${p.site}<br>
-    Severity: <strong style="color:${severityColor}">
-      ${p.severity}
-    </strong><br>
-    Status: ${p.status}<br>
-    Description: ${p.description || "No description"}<br>
-    <a href="${sharepointUrl}" target="_blank">View in SharePoint</a><br>
-    <button onclick="markCompleted(${p.id}, this)">Mark Completed</button>
-  `);
-}
-
-}).addTo(map);
-}
-
-async function fetchOpenIssues() {
-  try {
-    const res = await fetch(ISSUES_GEOJSON_URL);
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+    if (issuesLayer) {
+      map.removeLayer(issuesLayer);
     }
 
-    const json = await res.json();
+    issuesLayer = L.geoJSON(geojson, {
+      pointToLayer: (feature, latlng) => {
+        const fill = getSeverityColor(feature.properties.severity);
+        return L.circleMarker(latlng, {
+          pane: "issuesPane",
+          radius: 8,
+          color: "#333",
+          weight: 1,
+          fillColor: fill,
+          fillOpacity: 0.85
+        });
+      },
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties;
+        const severityColor = getSeverityColor(p.severity);
 
-    // Check for data property
-    if (!json?.data || !json.data.features) {
-      console.warn("No issues returned or invalid GeoJSON. Falling back to empty FeatureCollection.");
+        const sharepointUrl =
+          `https://thetrustees.sharepoint.com/sites/SouthShoreRegionVolunteers/Lists/Trail%20Monitoring%20Reports/DispForm.aspx?ID=${p.id}`;
+
+
+layer.bindPopup(
+  `<div class="popup-content">
+    <div class="popup-row"><strong>${p.issueType}</strong></div>
+    <div class="popup-row">Site: ${p.site}</div>
+    <div class="popup-row">Severity: <strong style="color:${severityColor}">${p.severity}</strong></div>
+    <div class="popup-row">Status: ${p.status}</div>
+    <div class="popup-row">Description: ${p.description || "<em>No description</em>"}</div>
+    <div class="popup-row"><a href="${sharepointUrl}" target="_blank">View in SharePoint</a></div>
+    <div class="popup-row"><button onclick="markCompleted(${p.id}, this)">Mark Completed</button></div>
+  </div>`,
+  { className: "custom-popup" }
+);
+
+      }
+    }).addTo(map);
+  }
+
+  async function fetchOpenIssues() {
+    try {
+      const res = await fetch(ISSUES_GEOJSON_URL);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = await res.json();
+
+      if (!json?.data || !json.data.features) {
+        console.warn("No issues returned or invalid GeoJSON. Falling back to empty FeatureCollection.");
+        return { type: "FeatureCollection", features: [] };
+      }
+
+      return json.data;
+    } catch (err) {
+      console.error("Failed to load issues", err);
       return { type: "FeatureCollection", features: [] };
     }
-
-    return json.data; // Leaflet expects FeatureCollection
-  } catch (err) {
-    console.error("Failed to load issues", err);
-    return { type: "FeatureCollection", features: [] }; // prevent map crash
-  }
-}
-
-async function markCompleted(id, button) {
-  try {
-    button.disabled = true;
-    button.textContent = "Updating…";
-
-    const res = await fetch("https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5b136aad51c94c51a010f2dc4e6ed490/triggers/manual/paths/invoke?api-version=1", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ID: id })
-    });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    // Remove the marker from the map
-    const popup = button.closest(".leaflet-popup-content");
-    const markerLayerId = popup._leaflet_id;
-
-    issuesLayer.eachLayer(layer => {
-      if (layer._leaflet_id === markerLayerId) {
-        issuesLayer.removeLayer(layer);
-      }
-    });
-
-  } catch (err) {
-    console.error(err);
-    alert("Failed to mark completed. Please try again.");
-    button.disabled = false;
-    button.textContent = "Mark Completed";
-  }
-}
-
-const siteFilter = document.getElementById("siteFilter");
-
-Object.keys(sites).forEach(siteName => {
-  const opt = document.createElement("option");
-  opt.value = siteName;
-  opt.textContent = siteName;
-  siteFilter.appendChild(opt);
-});
-
-siteFilter.addEventListener("change", async () => {
-  const selected = siteFilter.value;
-
-  clearSiteOverlays();
-
-  if (!selected) {
-    zoomToAllSites();
-
-    issuesLayer.eachLayer(layer => {
-      layer.setStyle({ opacity: 1, fillOpacity: 0.85 });
-    });
-
-    return;
   }
 
-  const site = sites[selected];
-  if (!site) return;
+  async function markCompleted(id, button) {
+    try {
+      button.disabled = true;
+      button.textContent = "Updating…";
 
-  await loadSiteBoundary(site, true);
-  await loadSiteTrails(site);
+      const res = await fetch("https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5b136aad51c94c51a010f2dc4e6ed490/triggers/manual/paths/invoke?api-version=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ID: id })
+      });
 
-  issuesLayer.eachLayer(layer => {
-    const match = layer.feature.properties.site === selected;
-    layer.setStyle({
-      opacity: match ? 1 : 0,
-      fillOpacity: match ? 0.85 : 0
-    });
-    if (!match) layer.closePopup();
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      // Remove the marker from the map
+      issuesLayer.eachLayer(layer => {
+        if (layer.feature.properties.id === id) {
+          issuesLayer.removeLayer(layer);
+        }
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert("Failed to mark completed. Please try again.");
+      button.disabled = false;
+      button.textContent = "Mark Completed";
+    }
+  }
+
+  // ========================
+  // SITE FILTER
+  // ========================
+  const siteFilter = document.getElementById("siteFilter");
+
+  Object.keys(sites).forEach(siteName => {
+    const opt = document.createElement("option");
+    opt.value = siteName;
+    opt.textContent = siteName;
+    siteFilter.appendChild(opt);
   });
-});
 
+  siteFilter.addEventListener("change", async () => {
+    const selected = siteFilter.value;
 
-map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
-loadIssues(map);
+    clearSiteOverlays();
 
-setInterval(() => {
+    if (!selected) {
+      zoomToAllSites();
+
+      issuesLayer.eachLayer(layer => {
+        layer.setStyle({ opacity: 1, fillOpacity: 0.85 });
+      });
+
+      return;
+    }
+
+    const site = sites[selected];
+    if (!site) return;
+
+    await loadSiteBoundary(site, true);
+    await loadSiteTrails(site);
+    await loadIssues(map);
+
+    issuesLayer.eachLayer(layer => {
+      const match = layer.feature.properties.site === selected;
+      layer.setStyle({
+        opacity: match ? 1 : 0,
+        fillOpacity: match ? 0.85 : 0
+      });
+      if (!match) layer.closePopup();
+    });
+  });
+
+  // ========================
+  // INITIAL LOAD + AUTO-REFRESH
+  // ========================
   loadIssues(map);
-}, 60000);
+  setInterval(() => {
+    loadIssues(map);
+  }, 60000);
 
 }
+
 
 
 })

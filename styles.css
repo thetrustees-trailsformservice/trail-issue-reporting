@@ -285,3 +285,43 @@ button#submitBtn:disabled {
 .hidden {
   display: none;
 }
+
+/* ===================== Leaflet Custom Popup ===================== */
+.leaflet-popup.custom-popup .leaflet-popup-content-wrapper {
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  font-family: Arial, sans-serif;
+  line-height: 1.4;
+}
+
+.popup-content .popup-row {
+  margin-bottom: 6px;
+}
+
+.popup-content em {
+  color: #555; /* for "No description" */
+}
+
+.popup-content a {
+  color: #0078d4;
+  text-decoration: none;
+}
+
+.popup-content a:hover {
+  text-decoration: underline;
+}
+
+.popup-content button {
+  padding: 4px 8px;
+  background: #4B6F44;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.popup-content button:hover {
+  background: #3e5c37;
+}
