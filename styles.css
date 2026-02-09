@@ -290,22 +290,31 @@ button#submitBtn:disabled {
 .leaflet-popup.custom-popup .leaflet-popup-content-wrapper {
   background: #fff;
   border-radius: 8px;
-  padding: 10px 14px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  font-family: Arial, sans-serif;
-  line-height: 1.4;
+  padding: 12px 16px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+  font-family: 'Open Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-.popup-content .popup-row {
-  margin-bottom: 6px;
+.leaflet-popup {
+  margin-bottom: 12px;
+}
+
+/* ===================== Popup Content ===================== */
+.popup-content {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .popup-content em {
   color: #555; /* for "No description" */
+  font-style: italic;
 }
 
 .popup-content a {
-  color: #0078d4;
+  color: #f47c20;
   text-decoration: none;
 }
 
@@ -313,15 +322,118 @@ button#submitBtn:disabled {
   text-decoration: underline;
 }
 
-.popup-content button {
-  padding: 4px 8px;
-  background: #4B6F44;
-  color: #fff;
+/* ===================== Flex Layout ===================== */
+.custom-popup .popup-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 240px;
+}
+
+.custom-popup .popup-header {
+  font-size: 1.2em;
+  font-weight: bold;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 2px;
+}
+
+.custom-popup .popup-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.custom-popup .popup-label {
+  font-weight: 600;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.custom-popup .popup-value {
+  flex-grow: 1;
+  text-align: right;
+  word-wrap: break-word;
+  white-space: normal;
+}
+
+/* For extra spacing in content rows */
+.popup-content .popup-row {
+  margin-bottom: 8px;
+}
+
+/* ===================== Buttons / Actions ===================== */
+.popup-content button,
+.popup-button {
+  width: 100%;
+  padding: 4px 6px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85em;
+  transition: background 0.2s;
 }
 
-.popup-content button:hover {
-  background: #3e5c37;
+.complete-btn {
+  background-color: #4CAF50;
+  color: white;
 }
+
+.complete-btn:hover {
+  background-color: #3b8b3b;
+}
+
+.view-btn {
+  background-color: #FF9800;
+  color: white;
+}
+
+.view-btn:hover {
+  background-color: #e67e22;
+}
+
+.custom-popup .actions-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.leaflet-popup.custom-popup.severity-high .leaflet-popup-content-wrapper {
+  border: 3px solid #d73027;
+  box-shadow: inset 0 0 8px rgba(215, 48, 39, 0.2), 0 3px 8px rgba(0,0,0,0.15);
+}
+
+.leaflet-popup.custom-popup.severity-medium .leaflet-popup-content-wrapper {
+  border: 3px solid #fc8d59;
+  box-shadow: inset 0 0 8px rgba(252, 141, 89, 0.2), 0 3px 8px rgba(0,0,0,0.15);
+}
+
+.leaflet-popup.custom-popup.severity-low .leaflet-popup-content-wrapper {
+  border: 3px solid #91cf60;
+  box-shadow: inset 0 0 8px rgba(145, 207, 96, 0.2), 0 3px 8px rgba(0,0,0,0.15);
+}
+
+/* ===================== Marker Icon ===================== */
+.marker-icon {
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: block;
+    border: 2px solid white;
+    box-shadow: 0 0 5px rgba(0,0,0,0.3);
+}
+
+.marker-icon:hover {
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+/*
+.marker-icon svg {
+  transition: transform 0.15s ease;
+}
+
+.marker-icon svg:hover {
+  transform: scale(1.3);
+}
+*/

@@ -488,10 +488,11 @@ if (newReportBtn) {
    ==================== ISSUES PAGE ========================
    ========================================================= */
 if (isIssuesPage) {
-
   // ========================
   // UTILITY
   // ========================
+  let activeIssueId = null;
+
   function getSeverityColor(severity) {
     if (!severity) return "#999";
 
@@ -502,10 +503,35 @@ if (isIssuesPage) {
     return "#999";
   }
 
-  // ========================
-  // INIT MAP
-  // ========================
-  map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
+  function formatIssueAge(isoDate) {
+  if (!isoDate) return "Unknown";
+
+  const submitted = new Date(isoDate);
+  const now = new Date();
+  const diffMs = now - submitted;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "1 day ago";
+  return `${diffDays} days ago`;
+}
+
+// ========================
+// INIT MAP
+// ========================
+map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
+
+// ========================
+// LOAD ALL SITE BOUNDARIES + TRAILS (ISSUES MAP ONLY)
+// ========================
+Object.values(sites).forEach(site => {
+  if (site.boundary) {
+    loadSiteBoundary(site, false);
+  }
+  if (site.trails) {
+    loadSiteTrails(site);
+  }
+});
 
   // ========================
   // LOAD ISSUES
@@ -520,39 +546,133 @@ if (isIssuesPage) {
 
     issuesLayer = L.geoJSON(geojson, {
       pointToLayer: (feature, latlng) => {
-        const fill = getSeverityColor(feature.properties.severity);
-        return L.circleMarker(latlng, {
+        const fill = getSeverityColor(feature.severity);
+        
+        const marker = L.circleMarker(latlng, {
           pane: "issuesPane",
-          radius: 8,
-          color: "#333",
-          weight: 1,
+          radius: 9,
+          color: "#fff",
+          weight: 2,
           fillColor: fill,
-          fillOpacity: 0.85
+          fillOpacity: 0.9,
+          className: "marker-icon"
         });
+
+      marker.on('mouseover', function () {
+        this.setStyle({ radius: 12, weight: 3 });
+      });
+
+      marker.on('mouseout', function () {
+        this.setStyle({ radius: 9, weight: 2 });
+      });
+      
+      marker.on("click", () => {
+        const targetZoom = 16;
+        const latlng = marker.getLatLng();
+
+        map.closePopup();
+
+        // Convert latlng to pixel space
+        const point = map.project(latlng, targetZoom);
+
+        // Shift the map DOWN so popup has room ABOVE the marker
+        point.y -= 120; // 👈 adjust this number (100–150 sweet spot)
+
+        const offsetLatLng = map.unproject(point, targetZoom);
+
+        map.flyTo(offsetLatLng, targetZoom, {
+          animate: true,
+          duration: 0.5
+        });
+
+        map.once("moveend", () => {
+          marker.openPopup();
+        });
+      });
+
+
+      return marker;
       },
       onEachFeature: (feature, layer) => {
-        const p = feature.properties;
+        const p = feature;
+        const issueAge = formatIssueAge(p.submittedAt);
         const severityColor = getSeverityColor(p.severity);
 
         const sharepointUrl =
           `https://thetrustees.sharepoint.com/sites/SouthShoreRegionVolunteers/Lists/Trail%20Monitoring%20Reports/DispForm.aspx?ID=${p.id}`;
 
 
-layer.bindPopup(
-  `<div class="popup-content">
-    <div class="popup-row"><strong>${p.issueType}</strong></div>
-    <div class="popup-row">Site: ${p.site}</div>
-    <div class="popup-row">Severity: <strong style="color:${severityColor}">${p.severity}</strong></div>
-    <div class="popup-row">Status: ${p.status}</div>
-    <div class="popup-row">Description: ${p.description || "<em>No description</em>"}</div>
-    <div class="popup-row"><a href="${sharepointUrl}" target="_blank">View in SharePoint</a></div>
-    <div class="popup-row"><button onclick="markCompleted(${p.id}, this)">Mark Completed</button></div>
-  </div>`,
-  { className: "custom-popup" }
-);
+        const photoAdded = p.photoUrl ? `<a href="${p.photoUrl}" target="_blank">View Image</a>` : "No";
+
+        layer.bindPopup(
+          `<div class="popup-content">
+              <div class="popup-header">${p.issueType} — ${p.site}</div>
+
+              <div class="popup-row">
+                <span class="popup-label">Issue:</span>
+                <span class="popup-value">${p.issueType}</span>
+              </div>
+
+              <div class="popup-row">
+                <span class="popup-label">Severity:</span>
+                <span class="popup-value" style="color:${severityColor}">${p.severity}</span>
+              </div>
+
+              <div class="popup-row">
+                <span class="popup-label">Status:</span>
+                <span class="popup-value">${p.status}</span>
+              </div>
+
+              <div class="popup-row">
+                <span class="popup-label">Reported:</span>
+                <span class="popup-value">${formatIssueAge(p.submittedAt)}</span>
+              </div>
+
+              <div class="popup-row">
+                <span class="popup-label">Description:</span>
+                <span class="popup-value">${p.description || "<em>No description</em>"}</span>
+              </div>
+
+              <div class="popup-row">
+                <span class="popup-label">Photo:</span>
+                <span class="popup-value">${photoAdded}</span>
+              </div>
+
+              <div class="popup-row">
+                <button onclick="window.open('${sharepointUrl}', '_blank')" class="popup-button view-btn">View in SharePoint</button>
+              </div>
+
+              <div class="popup-row">
+                <button onclick="markCompleted(${p.id}, this)" class="popup-button complete-btn">Mark Completed</button>
+              </div>
+          </div>`,
+          {
+            className: `custom-popup severity-${p.severity.toLowerCase()}`,
+            maxWidth: 340,
+            minWidth: 240,
+            autoPan: true,
+            keepInView: false,
+            closeButton: true,
+            closeOnMove: false,
+            offset: [0, -10]
+          }
+        );
 
       }
+      
+      
     }).addTo(map);
+
+    // ========================
+    // REOPEN ACTIVE POPUP AFTER REFRESH
+    // ========================
+    if (activeIssueId !== null) {
+      issuesLayer.eachLayer(layer => {
+        if (layer.feature.id === activeIssueId) {
+          layer.openPopup();
+        }
+      });
+    }
   }
 
   async function fetchOpenIssues() {
@@ -592,7 +712,7 @@ layer.bindPopup(
 
       // Remove the marker from the map
       issuesLayer.eachLayer(layer => {
-        if (layer.feature.properties.id === id) {
+        if (layer.feature.id === id) {
           issuesLayer.removeLayer(layer);
         }
       });
@@ -620,9 +740,14 @@ layer.bindPopup(
   siteFilter.addEventListener("change", async () => {
     const selected = siteFilter.value;
 
+    // Close any open popup
+    map.closePopup();
+
+    // Clear current site boundaries and trails
     clearSiteOverlays();
 
     if (!selected) {
+      // Show all sites and all issues
       zoomToAllSites();
 
       issuesLayer.eachLayer(layer => {
@@ -632,30 +757,30 @@ layer.bindPopup(
       return;
     }
 
+    // Show boundaries/trails for the selected site
     const site = sites[selected];
     if (!site) return;
 
     await loadSiteBoundary(site, true);
     await loadSiteTrails(site);
-    await loadIssues(map);
 
+    // Filter markers by selected site
     issuesLayer.eachLayer(layer => {
-      const match = layer.feature.properties.site === selected;
+      const match = layer.feature.site === selected;
       layer.setStyle({
         opacity: match ? 1 : 0,
         fillOpacity: match ? 0.85 : 0
       });
-      if (!match) layer.closePopup();
+      if (!match) layer.closePopup(); // ensure hidden markers don't have open popups
     });
   });
+
+
 
   // ========================
   // INITIAL LOAD + AUTO-REFRESH
   // ========================
   loadIssues(map);
-  setInterval(() => {
-    loadIssues(map);
-  }, 60000);
 
 }
 
