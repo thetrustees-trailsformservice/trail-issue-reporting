@@ -116,6 +116,25 @@ h2 {
   margin-top: 1rem;
 }
 
+.issue-icon {
+  display: block;
+  width: 28px;
+  height: 28px;
+  pointer-events: auto; /* keep hover events */
+}
+
+.issue-icon svg {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.15s ease;
+  transform-origin: center center;
+}
+
+.issue-icon:hover svg {
+  transform: scale(1.2);
+}
+
+
 /* ---------- HINT ---------- */
 .map-hint {
   margin-top: 8px;

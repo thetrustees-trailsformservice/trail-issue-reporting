@@ -73,6 +73,45 @@ async function fetchGeoJson(url) {
   return data;
 }
 
+// -------------------- Issue SVG & Unicode Icon Mapping --------------------
+const severityColors = {
+  High: "#d73027",   // red
+  Medium: "#fc8d59", // orange
+  Low: "#91cf60"     // green
+};
+
+const issueIcons = {
+  Erosion: "⛰️",
+  Blowdown: "🌳",
+  Invasives: "🌿",
+  Drainage: "💧",
+  Safety: "⚠️",
+  Other: "❓"
+};
+
+function createIssueSVG(issueType, severity) {
+  const fillColor = severityColors[severity] || "#666";
+  const unicodeIcon = issueIcons[issueType] || "❓";
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+      <circle cx="14" cy="14" r="12" fill="${fillColor}" stroke="white" stroke-width="2"/>
+      <text x="14" y="18" font-size="14" text-anchor="middle" fill="black" stroke="white" stroke-width="0.5" paint-order="stroke">${unicodeIcon}</text>
+    </svg>
+  `;
+}
+
+function createLeafletIssueIcon(issueType, severity) {
+  return L.divIcon({
+    className: "issue-icon",
+    html: createIssueSVG(issueType, severity),
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -14]
+  });
+}
+
+
 async function loadSiteBoundary(site, doZoom = true) {
   if (!site?.boundary) return;
 
@@ -551,50 +590,37 @@ Object.values(sites).forEach(site => {
   }
 });
 
-  // ========================
-  // LOAD ISSUES
-  // ========================
-  async function loadIssues(map) {
-    const geojson = await fetchOpenIssues();
-    if (!geojson) return;
+// ========================
+// LOAD ISSUES
+// ========================
+async function loadIssues(map) {
+  const geojson = await fetchOpenIssues();
+  if (!geojson) return;
 
-    if (issuesLayer) {
-      map.removeLayer(issuesLayer);
-    }
+  if (issuesLayer) {
+    map.removeLayer(issuesLayer);
+  }
 
-    issuesLayer = L.geoJSON(geojson, {
-      pointToLayer: (feature, latlng) => {
-        const fill = getSeverityColor(feature.severity);
-        
-        const marker = L.circleMarker(latlng, {
-          pane: "issuesPane",
-          radius: 9,
-          color: "#fff",
-          weight: 2,
-          fillColor: fill,
-          fillOpacity: 0.9,
-          className: "marker-icon"
-        });
-
-      marker.on('mouseover', function () {
-        this.setStyle({ radius: 12, weight: 3 });
+  issuesLayer = L.geoJSON(geojson, {
+    pointToLayer: (feature, latlng) => {
+      // Create custom SVG icon
+      const icon = createLeafletIssueIcon(feature.issueType, feature.severity);
+      const marker = L.marker(latlng, {
+        icon: icon,
+        pane: "issuesPane"
       });
 
-      marker.on('mouseout', function () {
-        this.setStyle({ radius: 9, weight: 2 });
-      });
-      
-      marker.on("click", () => {
+      // Fly to marker on click and open popup
+      marker.on('click', () => {
         const targetZoom = 16;
-        const latlng = marker.getLatLng();
+        const markerLatLng = marker.getLatLng();
 
         map.closePopup();
 
-        // Convert latlng to pixel space
-        const point = map.project(latlng, targetZoom);
-
-        // Shift the map DOWN so popup has room ABOVE the marker
-        point.y -= 120; // 👈 adjust this number (100–150 sweet spot)
+        // Convert to pixel space
+        const point = map.project(markerLatLng, targetZoom);
+        // Shift UP so popup appears above marker
+        point.y -= 120;
 
         const offsetLatLng = map.unproject(point, targetZoom);
 
@@ -603,95 +629,88 @@ Object.values(sites).forEach(site => {
           duration: 0.5
         });
 
+        // Open popup after map finishes moving
         map.once("moveend", () => {
           marker.openPopup();
         });
       });
 
-
       return marker;
-      },
-      onEachFeature: (feature, layer) => {
-        const p = feature;
-        const issueAge = formatIssueAge(p.submittedAt);
-        const severityColor = getSeverityColor(p.severity);
+    },
+    onEachFeature: (feature, layer) => {
+      const p = feature;
+      const severityColor = getSeverityColor(p.severity);
+      const sharepointUrl = `https://thetrustees.sharepoint.com/sites/SouthShoreRegionVolunteers/Lists/Trail%20Monitoring%20Reports/DispForm.aspx?ID=${p.id}`;
+      const photoAdded = p.photoUrl ? `<a href="${p.photoUrl}" target="_blank">View Image</a>` : "No";
 
-        const sharepointUrl =
-          `https://thetrustees.sharepoint.com/sites/SouthShoreRegionVolunteers/Lists/Trail%20Monitoring%20Reports/DispForm.aspx?ID=${p.id}`;
+      layer.bindPopup(
+        `<div class="popup-content">
+            <div class="popup-header">${p.issueType} — ${p.site}</div>
 
+            <div class="popup-row">
+              <span class="popup-label">Issue:</span>
+              <span class="popup-value">${p.issueType}</span>
+            </div>
 
-        const photoAdded = p.photoUrl ? `<a href="${p.photoUrl}" target="_blank">View Image</a>` : "No";
+            <div class="popup-row">
+              <span class="popup-label">Severity:</span>
+              <span class="popup-value" style="color:${severityColor}">${p.severity}</span>
+            </div>
 
-        layer.bindPopup(
-          `<div class="popup-content">
-              <div class="popup-header">${p.issueType} — ${p.site}</div>
+            <div class="popup-row">
+              <span class="popup-label">Status:</span>
+              <span class="popup-value">${p.status}</span>
+            </div>
 
-              <div class="popup-row">
-                <span class="popup-label">Issue:</span>
-                <span class="popup-value">${p.issueType}</span>
-              </div>
+            <div class="popup-row">
+              <span class="popup-label">Reported:</span>
+              <span class="popup-value">${formatIssueAge(p.submittedAt)}</span>
+            </div>
 
-              <div class="popup-row">
-                <span class="popup-label">Severity:</span>
-                <span class="popup-value" style="color:${severityColor}">${p.severity}</span>
-              </div>
+            <div class="popup-row">
+              <span class="popup-label">Description:</span>
+              <span class="popup-value">${p.description || "<em>No description</em>"}</span>
+            </div>
 
-              <div class="popup-row">
-                <span class="popup-label">Status:</span>
-                <span class="popup-value">${p.status}</span>
-              </div>
+            <div class="popup-row">
+              <span class="popup-label">Photo:</span>
+              <span class="popup-value">${photoAdded}</span>
+            </div>
 
-              <div class="popup-row">
-                <span class="popup-label">Reported:</span>
-                <span class="popup-value">${formatIssueAge(p.submittedAt)}</span>
-              </div>
+            <div class="popup-row">
+              <button onclick="window.open('${sharepointUrl}', '_blank')" class="popup-button view-btn">View in SharePoint</button>
+            </div>
 
-              <div class="popup-row">
-                <span class="popup-label">Description:</span>
-                <span class="popup-value">${p.description || "<em>No description</em>"}</span>
-              </div>
-
-              <div class="popup-row">
-                <span class="popup-label">Photo:</span>
-                <span class="popup-value">${photoAdded}</span>
-              </div>
-
-              <div class="popup-row">
-                <button onclick="window.open('${sharepointUrl}', '_blank')" class="popup-button view-btn">View in SharePoint</button>
-              </div>
-
-              <div class="popup-row">
-                <button onclick="markCompleted(${p.id}, this)" class="popup-button complete-btn">Mark Completed</button>
-              </div>
-          </div>`,
-          {
-            className: `custom-popup severity-${p.severity.toLowerCase()}`,
-            maxWidth: 340,
-            minWidth: 240,
-            autoPan: true,
-            keepInView: false,
-            closeButton: true,
-            closeOnMove: false,
-            offset: [0, -10]
-          }
-        );
-
-      }
-      
-      
-    }).addTo(map);
-
-    // ========================
-    // REOPEN ACTIVE POPUP AFTER REFRESH
-    // ========================
-    if (activeIssueId !== null) {
-      issuesLayer.eachLayer(layer => {
-        if (layer.feature.id === activeIssueId) {
-          layer.openPopup();
+            <div class="popup-row">
+              <button onclick="markCompleted(${p.id}, this)" class="popup-button complete-btn">Mark Completed</button>
+            </div>
+        </div>`,
+        {
+          className: `custom-popup severity-${p.severity.toLowerCase()}`,
+          maxWidth: 340,
+          minWidth: 240,
+          autoPan: true,
+          keepInView: false,
+          closeButton: true,
+          closeOnMove: false,
+          offset: [0, -10]
         }
-      });
+      );
     }
+  }).addTo(map);
+
+  // ========================
+  // REOPEN ACTIVE POPUP AFTER REFRESH
+  // ========================
+  if (activeIssueId !== null && issuesLayer) {
+    issuesLayer.eachLayer(layer => {
+      if (layer.feature.id === activeIssueId) {
+        layer.openPopup();
+      }
+    });
   }
+}
+
 
   async function fetchOpenIssues() {
     try {
@@ -799,7 +818,6 @@ Object.values(sites).forEach(site => {
   // INITIAL LOAD + AUTO-REFRESH
   // ========================
   loadIssues(map);
-
 }
 
 
