@@ -22,6 +22,11 @@ let isSubmitting = false;
 let trailsLayer = null;
 let issuesLayer = null;
 
+// ========================
+// GEOJSON CACHE
+// ========================
+const geoJsonCache = {};
+
 function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
   const container = L.DomUtil.get(mapId);
   if (container && container._leaflet_id) return map;
@@ -40,7 +45,9 @@ function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
+    attribution: "&copy; OpenStreetMap contributors",
+    updateWhenIdle: true,
+    keepBuffer: 2
   }).addTo(map);
 
   return map;
@@ -52,10 +59,24 @@ function clearSiteOverlays() {
   });
 }
 
+async function fetchGeoJson(url) {
+  if (!url) return null;
+
+  if (geoJsonCache[url]) {
+    return geoJsonCache[url]; // return cached copy
+  }
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  geoJsonCache[url] = data; // store in cache
+  return data;
+}
+
 async function loadSiteBoundary(site, doZoom = true) {
   if (!site?.boundary) return;
 
-  const geojson = await fetch(site.boundary).then(r => r.json());
+  const geojson = await fetchGeoJson(site.boundary);
 
   boundaryShadowLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
@@ -78,7 +99,7 @@ async function loadSiteBoundary(site, doZoom = true) {
 async function loadSiteTrails(site) {
   if (!site?.trails) return;
 
-  const geojson = await fetch(site.trails).then(r => r.json());
+  const geojson = await fetchGeoJson(site.trails);
 
   trailsLayer = L.geoJSON(geojson, {
     pane: "trailsPane",
@@ -86,27 +107,22 @@ async function loadSiteTrails(site) {
   }).addTo(map);
 }
 
-function zoomToAllSites() {
+async function zoomToAllSites() {
   const layers = [];
 
-  Object.values(sites).forEach(site => {
+  for (const site of Object.values(sites)) {
     if (site.boundary) {
-      layers.push(
-        fetch(site.boundary)
-          .then(r => r.json())
-          .then(g => L.geoJSON(g))
-      );
+      const geojson = await fetchGeoJson(site.boundary);
+      layers.push(L.geoJSON(geojson));
     }
-  });
+  }
 
-  Promise.all(layers).then(geoLayers => {
-    const group = L.featureGroup(geoLayers);
-    const bounds = group.getBounds();
+  const group = L.featureGroup(layers);
+  const bounds = group.getBounds();
 
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [40, 40] });
-    }
-  });
+  if (bounds.isValid()) {
+    map.fitBounds(bounds, { padding: [40, 40] });
+  }
 }
 
 /* =========================================================
@@ -186,6 +202,8 @@ function refreshFieldStates() {
 function resetForm() {
   if (marker) map.removeLayer(marker);
   marker = null;
+
+  clearSiteOverlays();
 
   description.value = "";
   photoInput.value = "";
