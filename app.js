@@ -30,8 +30,13 @@ const geoJsonCache = {};
 function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
   const container = L.DomUtil.get(mapId);
   if (container && container._leaflet_id) return map;
-  
-  map = L.map(mapId).setView(center, zoom);
+
+  map = L.map(mapId, {
+    zoomSnap: 0.25,
+    zoomDelta: 0.5
+  }).setView(center, zoom);
+
+  map.doubleClickZoom.disable();
 
   map.createPane("boundaryPane");
   map.getPane("boundaryPane").style.zIndex = 400;
@@ -615,8 +620,6 @@ async function loadIssues(map) {
         const targetZoom = 16;
         const markerLatLng = marker.getLatLng();
 
-        map.closePopup();
-
         // Convert to pixel space
         const point = map.project(markerLatLng, targetZoom);
         // Shift UP so popup appears above marker
@@ -626,7 +629,8 @@ async function loadIssues(map) {
 
         map.flyTo(offsetLatLng, targetZoom, {
           animate: true,
-          duration: 0.5
+          duration: 0.6,
+          easeLinearity: 0.2
         });
 
         // Open popup after map finishes moving
@@ -689,7 +693,7 @@ async function loadIssues(map) {
           className: `custom-popup severity-${p.severity.toLowerCase()}`,
           maxWidth: 340,
           minWidth: 240,
-          autoPan: true,
+          autoPan: false,
           keepInView: false,
           closeButton: true,
           closeOnMove: false,
