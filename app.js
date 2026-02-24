@@ -1,7 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-// ========================
-// CONFIG
-// ========================
+// ======================== CONFIG ========================
 const isFormPage = !!document.getElementById("map");
 const isIssuesPage = !!document.getElementById("issuesMap");
 
@@ -11,9 +9,7 @@ const POWER_AUTOMATE_URL =
 const ISSUES_GEOJSON_URL =
   "https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/d05f1cd01f824e8a86771bfe1e69ba1c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=o6rqskcqxVZdNtyo5Wj_-FL0W97sT9WPmQN_BZXO2rs";
 
-// ========================
-// GLOBALS
-// ========================
+// ======================== GLOBALS ========================
 let map;
 let marker = null;
 let boundaryLayer = null;
@@ -21,10 +17,27 @@ let boundaryShadowLayer = null;
 let isSubmitting = false;
 let trailsLayer = null;
 let issuesLayer = null;
+let markersById = {};
+let activeMarker = null;
+let currentSort = { column: null, asc: true };
 
-// ========================
-// GEOJSON CACHE
-// ========================
+function setActiveMarker(marker) {
+  if (activeMarker && activeMarker !== marker) {
+    const prevFeature = activeMarker.feature;
+    activeMarker.setIcon(
+      createLeafletIssueIcon(prevFeature.issueType, prevFeature.severity)
+    );
+  }
+
+  activeMarker = marker;
+
+  const feature = marker.feature;
+
+  marker.setIcon(
+    createLeafletIssueIcon(feature.issueType, feature.severity, true)
+  );
+}
+// ======================== GEOJSON CACHE ========================
 const geoJsonCache = {};
 
 function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
@@ -55,6 +68,20 @@ function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
     keepBuffer: 2
   }).addTo(map);
 
+  function highlightRow(issueId) {
+    document.querySelectorAll("#issuesTable tbody tr")
+      .forEach(r => r.classList.remove("active-row"));
+
+    const row = document.querySelector(
+      `#issuesTable tbody tr[data-id="${issueId}"]`
+    );
+
+    if (row) {
+      row.classList.add("active-row");
+      row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+
   return map;
 }
 
@@ -68,21 +95,21 @@ async function fetchGeoJson(url) {
   if (!url) return null;
 
   if (geoJsonCache[url]) {
-    return geoJsonCache[url]; // return cached copy
+    return geoJsonCache[url];
   }
 
   const response = await fetch(url);
   const data = await response.json();
 
-  geoJsonCache[url] = data; // store in cache
+  geoJsonCache[url] = data;
   return data;
 }
 
 // -------------------- Issue SVG & Unicode Icon Mapping --------------------
 const severityColors = {
-  High: "#d73027",   // red
-  Medium: "#fc8d59", // orange
-  Low: "#91cf60"     // green
+  High: "#d73027",
+  Medium: "#fc8d59",
+  Low: "#91cf60"
 };
 
 const issueIcons = {
@@ -106,13 +133,15 @@ function createIssueSVG(issueType, severity) {
   `;
 }
 
-function createLeafletIssueIcon(issueType, severity) {
+function createLeafletIssueIcon(issueType, severity, active = false) {
+  const size = active ? 34 : 28;
+
   return L.divIcon({
     className: "issue-icon",
-    html: createIssueSVG(issueType, severity),
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14]
+    html: createIssueSVG(issueType, severity, active),
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2]
   });
 }
 
@@ -173,9 +202,7 @@ async function zoomToAllSites() {
    ===================== FORM PAGE =========================
    ========================================================= */
 if (isFormPage) {
-// ========================
-// ELEMENTS
-// ========================
+// ======================== ELEMENTS ========================
 const siteSelect = document.getElementById("siteSelect");
 const submitBtn = document.getElementById("submitBtn");
 const statusMessage = document.getElementById("statusMessage");
@@ -190,17 +217,13 @@ const mapHint = document.getElementById("mapHint");
 
 submitBtn.disabled = true;
 
-// ========================
-// SUBMIT BUTTON CLICK
-// ========================
+// ======================== SUBMIT BUTTON CLICK ========================
 submitBtn.addEventListener("click", (e) => {
   e.preventDefault();
   submitIssue();
 });
 
-// ========================
-// STATUS HELPERS
-// ========================
+// ======================== STATUS HELPERS ========================
 function showStatus(message, type) {
   if (!statusMessage) return;
   statusMessage.textContent = message;
@@ -253,7 +276,6 @@ function resetForm() {
   photoInput.value = "";
   photoPreview.classList.add("hidden");
 
-  // reset submit button state
   submitBtn.disabled = true;
   siteSelect.value = "";
   issueType.value = "";
@@ -316,9 +338,7 @@ function updateMapRequiredState() {
 }
 
 
-// ========================
-// SITE DROPDOWN
-// ========================
+// ======================== SITE DROPDOWN ========================
 Object.keys(sites).forEach(site => {
   const opt = document.createElement("option");
   opt.value = site;
@@ -326,14 +346,10 @@ Object.keys(sites).forEach(site => {
   siteSelect.appendChild(opt);
 });
 
-// ========================
-// MAP INIT
-// ========================
+// ======================== MAP INIT ========================
 map = initBaseMap("map", [41.8029231, -70.6108888], 8);
 
-// ========================
-// MAP EVENTS
-// ========================
+// ======================== MAP EVENTS ========================
 map.on("click", e => {
   if (marker) map.removeLayer(marker);
 
@@ -345,9 +361,7 @@ map.on("click", e => {
   updateSubmitState();
 });
 
-// ========================
-// PHOTO PREVIEW
-// ========================
+// ======================== PHOTO PREVIEW ========================
 fakeFileBtn.addEventListener("click", () => {
   photoInput.click();
 });
@@ -371,9 +385,7 @@ photoInput.addEventListener("change", () => {
   reader.readAsDataURL(file);
 });
 
-// ========================
-// BASE64 CONVERSION
-// ========================
+// ======================== BASE64 CONVERSION ========================
 function toBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -388,9 +400,7 @@ function toBase64(file) {
   });
 }
 
-// ========================
-// FLOATING LABELS
-// ========================
+// ======================== FLOATING LABELS ========================
 function initFloatingLabels() {
   document.querySelectorAll(".input-wrapper input, .input-wrapper textarea, .input-wrapper select")
     .forEach(el => {
@@ -428,7 +438,6 @@ function initFloatingLabels() {
       el.addEventListener("input", updateState);
       el.addEventListener("change", updateState);
 
-      // Initialize
       updateState();
     });
 
@@ -446,8 +455,6 @@ function initHintVisibility() {
   ];
 
   requiredFields.forEach(item => {
-
-    // SAFETY CHECK
     if (!item.el || !item.hint) return;
 
     const check = () => {
@@ -465,9 +472,7 @@ function initHintVisibility() {
 initHintVisibility();
 
 
-// ========================
-// SUBMIT
-// ========================
+// ======================== SUBMIT ========================
 async function submitIssue() {
   if (isSubmitting) return;
   isSubmitting = true;
@@ -531,9 +536,7 @@ async function submitIssue() {
   }
 }
 
-// ========================
-// TOAST HANDLING
-// ========================
+// ======================== TOAST HANDLING ========================
 const successToast = document.getElementById("successToast");
 const newReportBtn = document.getElementById("newReportBtn");
 
@@ -550,9 +553,7 @@ if (newReportBtn) {
    ==================== ISSUES PAGE ========================
    ========================================================= */
 if (isIssuesPage) {
-  // ========================
-  // UTILITY
-  // ========================
+  // ======================== UTILITY ========================
   let activeIssueId = null;
 
   function getSeverityColor(severity) {
@@ -578,14 +579,10 @@ if (isIssuesPage) {
   return `${diffDays} days ago`;
 }
 
-// ========================
-// INIT MAP
-// ========================
+// ======================== INIT MAP ========================
 map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
 
-// ========================
-// LOAD ALL SITE BOUNDARIES + TRAILS (ISSUES MAP ONLY)
-// ========================
+// ======================== LOAD ALL SITE BOUNDARIES + TRAILS (ISSUES MAP ONLY) ========================
 Object.values(sites).forEach(site => {
   if (site.boundary) {
     loadSiteBoundary(site, false);
@@ -595,10 +592,9 @@ Object.values(sites).forEach(site => {
   }
 });
 
-// ========================
-// LOAD ISSUES
-// ========================
+// ======================== LOAD ISSUES ========================
 async function loadIssues(map) {
+  const markerIndex = {};
   const geojson = await fetchOpenIssues();
   if (!geojson) return;
 
@@ -606,37 +602,41 @@ async function loadIssues(map) {
     map.removeLayer(issuesLayer);
   }
 
+  // Keep reference to table rows
+  const rowsById = {};
+
   issuesLayer = L.geoJSON(geojson, {
     pointToLayer: (feature, latlng) => {
-      // Create custom SVG icon
       const icon = createLeafletIssueIcon(feature.issueType, feature.severity);
-      const marker = L.marker(latlng, {
-        icon: icon,
-        pane: "issuesPane"
-      });
+      const marker = L.marker(latlng, { icon, pane: "issuesPane" });
 
-      // Fly to marker on click and open popup
-      marker.on('click', () => {
+      markerIndex[feature.id] = marker;
+
+      marker.feature = feature; // ensure feature is attached for active marker
+
+      marker.on("click", () => {
+        setActiveMarker(marker);
+
+        // Highlight table row
+        const row = rowsById[feature.id];
+        if (row) {
+          Object.values(rowsById).forEach(r => r.classList.remove("active-row"));
+          row.classList.add("active-row");
+          row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+
+        // Fly to marker
         const targetZoom = 16;
-        const markerLatLng = marker.getLatLng();
-
-        // Convert to pixel space
-        const point = map.project(markerLatLng, targetZoom);
-        // Shift UP so popup appears above marker
+        const point = map.project(marker.getLatLng(), targetZoom);
         point.y -= 120;
-
         const offsetLatLng = map.unproject(point, targetZoom);
 
         map.flyTo(offsetLatLng, targetZoom, {
           animate: true,
-          duration: 0.6,
-          easeLinearity: 0.2
+          duration: 0.6
         });
 
-        // Open popup after map finishes moving
-        map.once("moveend", () => {
-          marker.openPopup();
-        });
+        map.once("moveend", () => marker.openPopup());
       });
 
       return marker;
@@ -649,70 +649,124 @@ async function loadIssues(map) {
 
       layer.bindPopup(
         `<div class="popup-content">
-            <div class="popup-header">${p.issueType} — ${p.site}</div>
-
-            <div class="popup-row">
-              <span class="popup-label">Issue:</span>
-              <span class="popup-value">${p.issueType}</span>
-            </div>
-
-            <div class="popup-row">
-              <span class="popup-label">Severity:</span>
-              <span class="popup-value" style="color:${severityColor}">${p.severity}</span>
-            </div>
-
-            <div class="popup-row">
-              <span class="popup-label">Status:</span>
-              <span class="popup-value">${p.status}</span>
-            </div>
-
-            <div class="popup-row">
-              <span class="popup-label">Reported:</span>
-              <span class="popup-value">${formatIssueAge(p.submittedAt)}</span>
-            </div>
-
-            <div class="popup-row">
-              <span class="popup-label">Description:</span>
-              <span class="popup-value">${p.description || "<em>No description</em>"}</span>
-            </div>
-
-            <div class="popup-row">
-              <span class="popup-label">Photo:</span>
-              <span class="popup-value">${photoAdded}</span>
-            </div>
-
-            <div class="popup-row">
-              <button onclick="window.open('${sharepointUrl}', '_blank')" class="popup-button view-btn">View in SharePoint</button>
-            </div>
-
-            <div class="popup-row">
-              <button onclick="markCompleted(${p.id}, this)" class="popup-button complete-btn">Mark Completed</button>
-            </div>
+          <div class="popup-header">${p.issueType} — ${p.site}</div>
+          <div class="popup-row">
+            <span class="popup-label">Issue:</span>
+            <span class="popup-value">${p.issueType}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">Severity:</span>
+            <span class="popup-value" style="color:${severityColor}">${p.severity}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">Reported:</span>
+            <span class="popup-value">${formatIssueAge(p.submittedAt)}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">Description:</span>
+            <span class="popup-value">${p.description || "<em>No description</em>"}</span>
+          </div>
+          <div class="popup-row">
+            <span class="popup-label">Photo:</span>
+            <span class="popup-value">${photoAdded}</span>
+          </div>
+          <div class="popup-row">
+            <button onclick="window.open('${sharepointUrl}', '_blank')" class="popup-button view-btn">View in SharePoint</button>
+          </div>
+          <div class="popup-row">
+            <button onclick="markCompleted(${p.id}, this)" class="popup-button complete-btn">Mark Completed</button>
+          </div>
         </div>`,
-        {
-          className: `custom-popup severity-${p.severity.toLowerCase()}`,
-          maxWidth: 340,
-          minWidth: 240,
-          autoPan: false,
-          keepInView: false,
-          closeButton: true,
-          closeOnMove: false,
-          offset: [0, -10]
-        }
+        { className: `custom-popup severity-${p.severity.toLowerCase()}`, maxWidth: 340, minWidth: 240, autoPan: false, keepInView: false, closeButton: true, closeOnMove: false, offset: [0, -10] }
       );
+
+      layer.on("popupopen", () => {
+        setActiveMarker(layer);
+
+        // Highlight row
+        const row = rowsById[feature.id];
+        if (row) {
+          Object.values(rowsById).forEach(r => r.classList.remove("active-row"));
+          row.classList.add("active-row");
+          row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      });
     }
   }).addTo(map);
 
-  // ========================
-  // REOPEN ACTIVE POPUP AFTER REFRESH
-  // ========================
-  if (activeIssueId !== null && issuesLayer) {
-    issuesLayer.eachLayer(layer => {
-      if (layer.feature.id === activeIssueId) {
-        layer.openPopup();
-      }
+  // Build table and store rows
+  const container = document.getElementById("issuesTableContainer");
+  container.innerHTML = "";
+
+  const table = document.createElement("table");
+  table.className = "issues-table";
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th data-field="site">Site</th>
+        <th data-field="issueType">Issue</th>
+        <th data-field="severity">Severity</th>
+        <th data-field="submittedAt">Age</th>
+      </tr>
+    </thead>
+  `;
+
+  const tbody = document.createElement("tbody");
+  table.appendChild(tbody);
+  container.appendChild(table);
+
+  geojson.features.forEach(f => {
+    const row = document.createElement("tr");
+    row.dataset.id = f.id;
+    row.innerHTML = `
+      <td>${f.site}</td>
+      <td>${f.issueType}</td>
+      <td><span class="badge ${f.severity?.trim().toLowerCase()}">${f.severity}</span></td>
+      <td>${formatIssueAge(f.submittedAt)}</td>
+    `;
+
+    row.addEventListener("click", () => {
+      const marker = markerIndex[f.id];
+      if (!marker) return;
+
+      setActiveMarker(marker);
+
+      Object.values(rowsById).forEach(r => r.classList.remove("active-row"));
+      row.classList.add("active-row");
+
+      const targetZoom = 16;
+      const point = map.project(marker.getLatLng(), targetZoom);
+      point.y -= 120;
+      const offsetLatLng = map.unproject(point, targetZoom);
+
+      map.flyTo(offsetLatLng, targetZoom, { animate: true, duration: 0.6 });
+
+      map.once("moveend", () => marker.openPopup());
     });
-  }
+
+    rowsById[f.id] = row;
+    tbody.appendChild(row);
+  });
+
+  // Optional: sorting
+  table.querySelectorAll("th[data-field]").forEach(th => {
+    th.style.cursor = "pointer";
+    th.addEventListener("click", () => {
+      const field = th.dataset.field;
+      const sorted = [...geojson.features].sort((a, b) => {
+        let valA = a[field] ?? "";
+        let valB = b[field] ?? "";
+        if (field === "submittedAt") { valA = new Date(valA); valB = new Date(valB); }
+        if (valA < valB) return -1;
+        if (valA > valB) return 1;
+        return 0;
+      });
+      // re-render tbody
+      tbody.innerHTML = "";
+      sorted.forEach(f => tbody.appendChild(rowsById[f.id]));
+    });
+  });
 }
 
 
@@ -751,7 +805,6 @@ async function loadIssues(map) {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      // Remove the marker from the map
       issuesLayer.eachLayer(layer => {
         if (layer.feature.id === id) {
           issuesLayer.removeLayer(layer);
@@ -766,9 +819,7 @@ async function loadIssues(map) {
     }
   }
 
-  // ========================
-  // SITE FILTER
-  // ========================
+  // ======================== SITE FILTER ========================
   const siteFilter = document.getElementById("siteFilter");
 
   Object.keys(sites).forEach(siteName => {
@@ -780,15 +831,10 @@ async function loadIssues(map) {
 
   siteFilter.addEventListener("change", async () => {
     const selected = siteFilter.value;
-
-    // Close any open popup
     map.closePopup();
-
-    // Clear current site boundaries and trails
     clearSiteOverlays();
 
     if (!selected) {
-      // Show all sites and all issues
       zoomToAllSites();
 
       issuesLayer.eachLayer(layer => {
@@ -798,32 +844,138 @@ async function loadIssues(map) {
       return;
     }
 
-    // Show boundaries/trails for the selected site
     const site = sites[selected];
     if (!site) return;
 
     await loadSiteBoundary(site, true);
     await loadSiteTrails(site);
 
-    // Filter markers by selected site
     issuesLayer.eachLayer(layer => {
       const match = layer.feature.site === selected;
       layer.setStyle({
         opacity: match ? 1 : 0,
         fillOpacity: match ? 0.85 : 0
       });
-      if (!match) layer.closePopup(); // ensure hidden markers don't have open popups
+      if (!match) layer.closePopup();
     });
   });
 
-
-
-  // ========================
-  // INITIAL LOAD + AUTO-REFRESH
-  // ========================
+// ======================== INITIAL LOAD + AUTO-REFRESH ========================
   loadIssues(map);
 }
+// ======================== ISSUES TABLE ========================
+function buildIssuesTable(geojson, markerIndex) {
+  const container = document.getElementById("issuesTableContainer");
+  container.innerHTML = "";
 
+  // Keep a reference for sorting and rows
+  let currentIssues = geojson.features;
+  let currentSort = { field: null, asc: true };
+  const rowsById = {};
 
+  const table = document.createElement("table");
+  table.className = "issues-table";
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th data-field="site">Site</th>
+        <th data-field="issueType">Issue</th>
+        <th data-field="severity">Severity</th>
+        <th data-field="submittedAt">Age</th>
+      </tr>
+    </thead>
+  `;
+
+  const tbody = document.createElement("tbody");
+  table.appendChild(tbody);
+  container.appendChild(table);
+
+  function renderTable(features) {
+    tbody.innerHTML = "";
+
+    features.forEach(f => {
+      const row = document.createElement("tr");
+      row.dataset.id = f.id;
+
+      row.innerHTML = `
+        <td>${f.site}</td>
+        <td>${f.issueType}</td>
+        <td><span class="badge ${f.severity?.trim().toLowerCase()}">${f.severity}</span></td>
+        <td>${formatIssueAge(f.submittedAt)}</td>
+      `;
+
+      // Store row by feature id
+      rowsById[f.id] = row;
+
+      row.addEventListener("click", () => {
+        const marker = markerIndex[f.id];
+        if (!marker) return;
+
+        // Highlight active row
+        highlightRow(f.id);
+
+        setActiveMarker(marker);
+
+        const targetZoom = 16;
+        const latlng = marker.getLatLng();
+
+        const point = map.project(latlng, targetZoom);
+        point.y -= 120;
+
+        const offsetLatLng = map.unproject(point, targetZoom);
+
+        map.flyTo(offsetLatLng, targetZoom, { animate: true, duration: 0.6 });
+
+        map.once("moveend", () => marker.openPopup());
+      });
+
+      tbody.appendChild(row);
+    });
+  }
+
+  function sortTable(field) {
+    if (currentSort.field === field) {
+      currentSort.asc = !currentSort.asc;
+    } else {
+      currentSort.field = field;
+      currentSort.asc = true;
+    }
+
+    const sorted = [...currentIssues].sort((a, b) => {
+      let valA = a[field] ?? "";
+      let valB = b[field] ?? "";
+
+      if (field === "submittedAt") {
+        valA = new Date(valA);
+        valB = new Date(valB);
+      }
+
+      if (valA < valB) return currentSort.asc ? -1 : 1;
+      if (valA > valB) return currentSort.asc ? 1 : -1;
+      return 0;
+    });
+
+    renderTable(sorted);
+  }
+
+  function highlightRow(issueId) {
+    Object.values(rowsById).forEach(r => r.classList.remove("active-row"));
+    const row = rowsById[issueId];
+    if (row) row.classList.add("active-row");
+  }
+
+  // Make highlightRow globally accessible for popup clicks
+  window.highlightRow = highlightRow;
+
+  // attach sorting to headers
+  table.querySelectorAll("th[data-field]").forEach(th => {
+    th.style.cursor = "pointer";
+    th.addEventListener("click", () => sortTable(th.dataset.field));
+  });
+
+  // initial render
+  renderTable(currentIssues);
+}
 
 })
