@@ -15,12 +15,26 @@
 <body>
   <h1>Open Trail Issues</h1>
   
-  <label for="siteFilter">Filter by Site:</label>
+  <label for="siteFilter">Zoom to Site:</label>
   <select id="siteFilter">
     <option value="">All Sites</option>
   </select>
 
   <div id="issuesMap"></div>
+  <div id="issue-controls">
+
+  <div id="issue-summary"></div>
+
+  <div id="issue-filters">
+    <button class="filter-btn active" data-severity="all">All</button>
+    <button class="filter-btn" data-severity="high">High</button>
+    <button class="filter-btn" data-severity="medium">Medium</button>
+    <button class="filter-btn" data-severity="low">Low</button>
+  </div>
+
+  <input type="text" id="issue-search" placeholder="Search issue, site, description..." />
+
+</div>
   <div id="issuesTableContainer"></div>
 
   <!-- Leaflet JS -->

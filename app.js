@@ -17,9 +17,12 @@ let boundaryShadowLayer = null;
 let isSubmitting = false;
 let trailsLayer = null;
 let issuesLayer = null;
-let markersById = {};
 let activeMarker = null;
-let currentSort = { column: null, asc: true };
+let activeSeverityFilter = "all";
+let activeSearchTerm = "";
+let currentSortField = null;
+let currentSortDirection = "asc";
+let allFeatures = [];
 
 function setActiveMarker(marker) {
   if (activeMarker && activeMarker !== marker) {
@@ -46,7 +49,8 @@ function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
 
   map = L.map(mapId, {
     zoomSnap: 0.25,
-    zoomDelta: 0.5
+    zoomDelta: 0.5,
+    attributionControl: false
   }).setView(center, zoom);
 
   map.doubleClickZoom.disable();
@@ -61,9 +65,8 @@ function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
   map.getPane("issuesPane").style.zIndex = 600;
   map.getPane("issuesPane").style.pointerEvents = "auto";
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors",
     updateWhenIdle: true,
     keepBuffer: 2
   }).addTo(map);
@@ -597,6 +600,7 @@ async function loadIssues(map) {
   const markerIndex = {};
   const geojson = await fetchOpenIssues();
   if (!geojson) return;
+  allFeatures = geojson.features;
 
   if (issuesLayer) {
     map.removeLayer(issuesLayer);
@@ -612,7 +616,7 @@ async function loadIssues(map) {
 
       markerIndex[feature.id] = marker;
 
-      marker.feature = feature; // ensure feature is attached for active marker
+      marker.feature = feature;
 
       marker.on("click", () => {
         setActiveMarker(marker);
@@ -694,79 +698,180 @@ async function loadIssues(map) {
     }
   }).addTo(map);
 
-  // Build table and store rows
-  const container = document.getElementById("issuesTableContainer");
-  container.innerHTML = "";
+  // ================= TABLE SYSTEM =================
+    const container = document.getElementById("issuesTableContainer");
+    container.innerHTML = "";
 
-  const table = document.createElement("table");
-  table.className = "issues-table";
+    const table = document.createElement("table");
+    table.className = "issues-table";
 
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th data-field="site">Site</th>
-        <th data-field="issueType">Issue</th>
-        <th data-field="severity">Severity</th>
-        <th data-field="submittedAt">Age</th>
-      </tr>
-    </thead>
-  `;
-
-  const tbody = document.createElement("tbody");
-  table.appendChild(tbody);
-  container.appendChild(table);
-
-  geojson.features.forEach(f => {
-    const row = document.createElement("tr");
-    row.dataset.id = f.id;
-    row.innerHTML = `
-      <td>${f.site}</td>
-      <td>${f.issueType}</td>
-      <td><span class="badge ${f.severity?.trim().toLowerCase()}">${f.severity}</span></td>
-      <td>${formatIssueAge(f.submittedAt)}</td>
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th data-field="site" class="sortable">Site ▲▼</th>
+          <th data-field="issueType" class="sortable">Issue ▲▼</th>
+          <th data-field="severity" class="sortable">Severity ▲▼</th>
+          <th data-field="submittedAt" class="sortable">Age ▲▼</th>
+        </tr>
+      </thead>
     `;
 
-    row.addEventListener("click", () => {
-      const marker = markerIndex[f.id];
-      if (!marker) return;
+    const tbody = document.createElement("tbody");
+    table.appendChild(tbody);
+    container.appendChild(table);
 
-      setActiveMarker(marker);
+    // ---------------- APPLY FILTER + SORT + RENDER ----------------
 
-      Object.values(rowsById).forEach(r => r.classList.remove("active-row"));
-      row.classList.add("active-row");
+    function renderTable() {
 
-      const targetZoom = 16;
-      const point = map.project(marker.getLatLng(), targetZoom);
-      point.y -= 120;
-      const offsetLatLng = map.unproject(point, targetZoom);
-
-      map.flyTo(offsetLatLng, targetZoom, { animate: true, duration: 0.6 });
-
-      map.once("moveend", () => marker.openPopup());
-    });
-
-    rowsById[f.id] = row;
-    tbody.appendChild(row);
-  });
-
-  // Optional: sorting
-  table.querySelectorAll("th[data-field]").forEach(th => {
-    th.style.cursor = "pointer";
-    th.addEventListener("click", () => {
-      const field = th.dataset.field;
-      const sorted = [...geojson.features].sort((a, b) => {
-        let valA = a[field] ?? "";
-        let valB = b[field] ?? "";
-        if (field === "submittedAt") { valA = new Date(valA); valB = new Date(valB); }
-        if (valA < valB) return -1;
-        if (valA > valB) return 1;
-        return 0;
-      });
-      // re-render tbody
       tbody.innerHTML = "";
-      sorted.forEach(f => tbody.appendChild(rowsById[f.id]));
+      const rowsById = {};
+
+      let filtered = allFeatures.filter(f => {
+
+        const matchesSeverity =
+          activeSeverityFilter === "all" ||
+          f.severity.toLowerCase() === activeSeverityFilter;
+
+        const matchesSearch =
+          f.site.toLowerCase().includes(activeSearchTerm) ||
+          f.issueType.toLowerCase().includes(activeSearchTerm) ||
+          (f.description || "").toLowerCase().includes(activeSearchTerm);
+
+        return matchesSeverity && matchesSearch;
+      });
+
+      if (currentSortField) {
+        filtered.sort((a, b) => {
+
+          let valA = a[currentSortField] ?? "";
+          let valB = b[currentSortField] ?? "";
+
+          if (currentSortField === "submittedAt") {
+            valA = new Date(valA);
+            valB = new Date(valB);
+          }
+
+          if (typeof valA === "string") {
+            valA = valA.toLowerCase();
+            valB = valB.toLowerCase();
+          }
+
+          if (valA < valB) return currentSortDirection === "asc" ? -1 : 1;
+          if (valA > valB) return currentSortDirection === "asc" ? 1 : -1;
+          return 0;
+        });
+      }
+
+      filtered.forEach(f => {
+
+        const row = document.createElement("tr");
+        row.dataset.id = f.id;
+
+        row.innerHTML = `
+          <td>${f.site}</td>
+          <td>${f.issueType}</td>
+          <td><span class="badge ${f.severity?.trim().toLowerCase()}">${f.severity}</span></td>
+          <td>${formatIssueAge(f.submittedAt)}</td>
+        `;
+
+        row.addEventListener("click", () => {
+          const marker = markerIndex[f.id];
+          if (!marker) return;
+
+          setActiveMarker(marker);
+
+          document.querySelectorAll(".issues-table tr")
+            .forEach(r => r.classList.remove("active-row"));
+
+          row.classList.add("active-row");
+
+          const targetZoom = 16;
+          const point = map.project(marker.getLatLng(), targetZoom);
+          point.y -= 120;
+          const offsetLatLng = map.unproject(point, targetZoom);
+
+          map.flyTo(offsetLatLng, targetZoom, { animate: true, duration: 0.6 });
+
+          map.once("moveend", () => marker.openPopup());
+        });
+
+        rowsById[f.id] = row;
+        tbody.appendChild(row);
+      });
+
+      updateSummary(filtered);
+    }
+
+    // ---------------- SORT HEADERS ----------------
+
+    table.querySelectorAll(".sortable").forEach(th => {
+      th.addEventListener("click", () => {
+
+        const field = th.dataset.field;
+
+        if (currentSortField === field) {
+          currentSortDirection =
+            currentSortDirection === "asc" ? "desc" : "asc";
+        } else {
+          currentSortField = field;
+          currentSortDirection = "asc";
+        }
+
+        updateSortIndicators();
+        renderTable();
+      });
     });
-  });
+
+    function updateSortIndicators() {
+      table.querySelectorAll(".sortable").forEach(th => {
+        const field = th.dataset.field;
+        const base = th.innerText.split(" ")[0];
+
+        if (field === currentSortField) {
+          th.innerText = base + (currentSortDirection === "asc" ? " ▲" : " ▼");
+        } else {
+          th.innerText = base + " ▲▼";
+        }
+      });
+    }
+
+    // ---------------- FILTER BUTTONS ----------------
+
+    document.querySelectorAll(".filter-btn").forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll(".filter-btn")
+          .forEach(b => b.classList.remove("active"));
+
+        btn.classList.add("active");
+
+        activeSeverityFilter = btn.dataset.severity;
+        renderTable();
+      };
+    });
+
+    // ---------------- SEARCH ----------------
+
+    document.getElementById("issue-search")
+      .addEventListener("input", e => {
+        activeSearchTerm = e.target.value.toLowerCase();
+        renderTable();
+      });
+
+    // ---------------- SUMMARY ----------------
+
+    function updateSummary(filtered) {
+
+      const high = allFeatures.filter(f => f.severity.toLowerCase() === "high").length;
+      const medium = allFeatures.filter(f => f.severity.toLowerCase() === "medium").length;
+      const low = allFeatures.filter(f => f.severity.toLowerCase() === "low").length;
+
+      document.getElementById("issue-summary").innerText =
+        `Total: ${allFeatures.length} | High: ${high} | Medium: ${medium} | Low: ${low} | Showing: ${filtered.length}`;
+    }
+
+    // Initial render
+    renderTable();
 }
 
 
@@ -965,16 +1070,13 @@ function buildIssuesTable(geojson, markerIndex) {
     if (row) row.classList.add("active-row");
   }
 
-  // Make highlightRow globally accessible for popup clicks
   window.highlightRow = highlightRow;
 
-  // attach sorting to headers
   table.querySelectorAll("th[data-field]").forEach(th => {
     th.style.cursor = "pointer";
     th.addEventListener("click", () => sortTable(th.dataset.field));
   });
 
-  // initial render
   renderTable(currentIssues);
 }
 

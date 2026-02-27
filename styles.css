@@ -224,6 +224,50 @@ tr:hover {
   border-left: 4px solid #0284c7;
 }
 
+#issue-controls {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+#issue-summary {
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+#issue-filters {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.filter-btn {
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.filter-btn.active {
+  background: #0284c7;
+  color: white;
+  border-color: #0284c7;
+}
+
+#issue-search {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  font-size: 14px;
+}
+
 /* ---------- HINT ---------- */
 .map-hint {
   margin-top: 8px;
