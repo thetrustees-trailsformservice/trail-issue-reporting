@@ -1,5 +1,6 @@
+// WORKING VERSION BEFORE CHANGES
 document.addEventListener("DOMContentLoaded", () => {
-// ======================== CONFIG ========================
+// ======================== CONFIG ======================== 
 const isFormPage = !!document.getElementById("map");
 const isIssuesPage = !!document.getElementById("issuesMap");
 
