@@ -1,46 +1,136 @@
-<!--WORKING VERSION BEFORE CHANGES-->
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Trail Issues Map</title>
-
+  <title>Trail Issues Map — The Trustees</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="View and manage open trail issues across all Trustees conservation properties." />
+
+  <!-- Preconnect for fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
   <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
+  <!-- App Styles -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
-  <h1>Open Trail Issues</h1>
-  
-  <label for="siteFilter">Zoom to Site:</label>
-  <select id="siteFilter">
-    <option value="">All Sites</option>
-  </select>
 
-  <div id="issuesMap"></div>
-  <div id="issue-controls">
+  <!-- ===================================================
+       NAVIGATION
+       =================================================== -->
+  <nav class="site-nav" role="navigation" aria-label="Site header">
+    <div class="nav-inner">
+      <div class="nav-logo" aria-label="Trail Issues Map">
+        <div class="nav-logo-icon" aria-hidden="true">🥾</div>
+        <div class="nav-logo-text">
+          Trail Monitoring — Issues Map
+          <span class="nav-logo-sub">The Trustees · Staff View</span>
+        </div>
+      </div>
+    </div>
+  </nav>
 
-  <div id="issue-summary"></div>
+  <!-- ===================================================
+       ISSUES LAYOUT (map + side panel)
+       =================================================== -->
+  <div class="issues-layout">
 
-  <div id="issue-filters">
-    <button class="filter-btn active" data-severity="all">All</button>
-    <button class="filter-btn" data-severity="high">High</button>
-    <button class="filter-btn" data-severity="medium">Medium</button>
-    <button class="filter-btn" data-severity="low">Low</button>
+    <!-- ---- MAP COLUMN ---- -->
+    <div class="issues-map-col" role="region" aria-label="Issues map">
+
+      <div id="issuesMap" role="application" aria-label="Trail issues map" tabindex="0"></div>
+
+      <!-- Map overlay: refresh indicator -->
+      <div class="refresh-indicator" id="refreshIndicator" aria-live="polite" aria-label="Data status">
+        <div class="refresh-dot" id="refreshDot"></div>
+        <span id="refreshLabel">Live</span>
+      </div>
+
+    </div>
+
+    <!-- ---- SIDE PANEL ---- -->
+    <aside class="issues-panel-col" role="complementary" aria-label="Issues list and filters">
+
+      <!-- Panel Header -->
+      <div class="panel-header">
+
+        <!-- Summary stats chips -->
+        <div class="stats-row" id="statsRow" aria-label="Issue summary">
+          <div class="stat-chip" title="Total open issues">
+            <span class="stat-value" id="statTotal">—</span>
+            <span class="stat-label">Total</span>
+          </div>
+          <div class="stat-chip high" title="High severity issues">
+            <span class="stat-value" id="statHigh">—</span>
+            <span class="stat-label">High</span>
+          </div>
+          <div class="stat-chip medium" title="Medium severity issues">
+            <span class="stat-value" id="statMedium">—</span>
+            <span class="stat-label">Medium</span>
+          </div>
+          <div class="stat-chip low" title="Low severity issues">
+            <span class="stat-value" id="statLow">—</span>
+            <span class="stat-label">Low</span>
+          </div>
+        </div>
+
+        <!-- Site filter + severity filter -->
+        <div class="controls-row">
+          <select id="siteFilter" class="panel-select" aria-label="Filter by site">
+            <option value="">All Sites</option>
+          </select>
+        </div>
+
+        <!-- Severity filter buttons -->
+        <div class="filter-btns" role="group" aria-label="Filter by severity">
+          <button class="filter-btn active" data-severity="all"    aria-pressed="true">All</button>
+          <button class="filter-btn"        data-severity="high"   aria-pressed="false">🔴 High</button>
+          <button class="filter-btn"        data-severity="medium" aria-pressed="false">🟡 Medium</button>
+          <button class="filter-btn"        data-severity="low"    aria-pressed="false">🟢 Low</button>
+        </div>
+
+        <!-- Search -->
+        <div class="search-wrapper" role="search">
+          <input
+            type="search"
+            id="issue-search"
+            placeholder="Search issues, sites, descriptions…"
+            aria-label="Search issues"
+            autocomplete="off"
+          />
+        </div>
+
+      </div> <!-- /panel-header -->
+
+      <!-- Issues List -->
+      <div class="issues-list-scroll" id="issuesList" role="list" aria-label="Open trail issues" aria-live="polite">
+        <!-- Cards injected by app.js -->
+        <div class="no-results" id="loadingMsg" aria-live="polite">
+          <div class="spinner"></div>
+          <div style="margin-top: 12px;">Loading issues…</div>
+        </div>
+      </div>
+
+    </aside>
+
   </div>
 
-  <input type="text" id="issue-search" placeholder="Search issue, site, description..." />
-
-</div>
-  <div id="issuesTableContainer"></div>
-
-  <!-- Leaflet JS -->
+  <!-- ===================================================
+       SCRIPTS
+       =================================================== -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Marker clustering -->
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <link  rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link  rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
   <script src="sites.js"></script>
   <script src="app.js"></script>
+
+
 </body>
 </html>

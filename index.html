@@ -1,125 +1,190 @@
-<!--WORKING VERSION BEFORE CHANGES-->
-<!DOCTYPE html> 
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Report a Trail Issue</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Custom styles -->
-  <link rel="stylesheet" href="styles.css">
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <meta charset="UTF-8" />
+  <title>Report a Trail Issue — The Trustees</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Report trail issues such as erosion, blowdowns, drainage problems, and safety hazards at Trustees conservation properties." />
 
+  <!-- Preconnect for fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
 
-<h2>REPORT A TRAIL ISSUE</h2>
-
-<div class="form">
-
-  <!-- SITE SELECT -->
-  <div class="input-wrapper">
-    <select id="siteSelect">
-      <option value="" selected disabled></option>
-    </select>
-    <label for="siteSelect">Choose a site</label>
-  </div>
-  <div class="hintRow">
-    <p id="siteHint" class="fieldHint required" data-for="siteSelect">* Required</p>
-    <p class="formHelpText">Which site are you reporting for?</p>
-  </div>
-
-  <!-- MAP -->
-  <div id="map"></div>
-
-  <div class="hintRow">
-    <p id="mapRequired" class="fieldHint required">* Required</p>
-    <p class="formHelpText">Click the map to mark the issue location.</p>
-  </div>
-
-  <!-- ISSUE TYPE -->
-  <div class="input-wrapper">
-    <select id="issueType" required>
-      <option value="" disabled selected></option>
-      <option value="Erosion">Erosion</option>
-      <option value="Blowdown">Blowdown / Fallen Tree</option>
-      <option value="Invasives">Invasive Plants</option>
-      <option value="Drainage">Drainage / Water Issue</option>
-      <option value="Safety">Safety Hazard</option>
-      <option value="Other">Other</option>
-    </select>
-    <label for="issueType">Issue Type</label>
-  </div>
-  <div class="hintRow">
-    <p id="issueTypeHint" class="fieldHint required" data-for="issueType">* Required</p>
-    <p class="formHelpText">What type of issue are you reporting?</p>
-  </div>
-
-  <!-- SEVERITY -->
-  <div class="input-wrapper">
-    <select id="severity">
-      <option value="" disabled selected></option>
-      <option value="Low">Low</option>
-      <option value="Medium">Medium</option>
-      <option value="High">High</option>
-    </select>
-    <label for="severity">Severity</label>
-  </div>
-  <div class="hintRow">
-    <p id="severityHint" class="fieldHint required" data-for="severity">* Required</p>
-    <p class="formHelpText">What is the severity of the issue?</p>
-  </div>
-
-  <!-- DESCRIPTION -->
-  <div class="input-wrapper">
-    <textarea id="description" rows="3" required></textarea>
-    <label for="description">Description of issue</label>
-  </div>
-  <div class="hintRow">
-    <p id="severityHint" class="fieldHint required" data-for="description">* Required</p>
-  </div>
-
-  <!-- PHOTO UPLOAD -->
-  <div class="input-wrapper file-wrapper">
-    <label for="photo" class="file-label"></label>
-    <div class="file-row">
-      <button type="button" id="fakeFileBtn">Choose file</button>
-      <span id="fileName">No file chosen</span>
+  <!-- ===================================================
+       NAVIGATION
+       =================================================== -->
+  <nav class="site-nav" role="navigation" aria-label="Site header">
+    <div class="nav-inner">
+      <div class="nav-logo" aria-label="Trail Issue Reporting">
+        <div class="nav-logo-icon" aria-hidden="true">🥾</div>
+        <div class="nav-logo-text">
+          Trail Monitoring
+          <span class="nav-logo-sub">The Trustees</span>
+        </div>
+      </div>
     </div>
-    <input type="file" id="photo" accept="image/*">
-  </div>
-  <p class="fieldHint optional">Optional</p>
+  </nav>
 
-  <img id="photoPreview" class="hidden" />
+  <!-- ===================================================
+       PAGE CONTENT
+       =================================================== -->
+  <main class="page-content" id="main-content">
 
-  <button id="submitBtn" type="button" disabled>SUBMIT ISSUE</button>
+    <div class="form-card" role="main">
 
-  <div id="statusMessage" class="status hidden"></div>
+      <!-- Card Header -->
+      <div class="form-card-header">
+        <div class="form-card-header-icon" aria-hidden="true">📋</div>
+        <div>
+          <h1>Report a Trail Issue</h1>
+          <p>Help us maintain safe, accessible trails across our properties</p>
+        </div>
+      </div>
 
-</div>
+      <!-- Card Body -->
+      <div class="form-body">
 
-<!--------TEMPORARY REMEMBER TO DELETE-------->
-<a href="issues.html">Map of issues.</a>
+        <!-- ---- SECTION: LOCATION ---- -->
+        <div class="form-section">
+          <div class="form-section-label">Location</div>
 
-<!-- SUCCESS TOAST -->
-<div id="successToast" class="toast hidden">
-  <div class="toast-inner">
-    <div class="toast-icon">✔</div>
-    <div class="toast-text">
-      <strong>Thank you!</strong>
-      <p>Your report has been submitted.</p>
+          <!-- Site Select -->
+          <div class="input-wrapper">
+            <select id="siteSelect" aria-required="true" aria-describedby="siteHint">
+              <option value="" selected disabled></option>
+            </select>
+            <label for="siteSelect">Property / Site</label>
+          </div>
+          <div class="hintRow">
+            <p id="siteHint" class="fieldHint required" data-for="siteSelect">* Required</p>
+            <p class="formHelpText">Which property are you reporting for?</p>
+          </div>
+
+          <!-- Map -->
+          <div id="map" role="application" aria-label="Map — click to mark issue location" tabindex="0"></div>
+
+          <div class="map-hint" id="mapHint" role="status" aria-live="polite">
+            <span aria-hidden="true">📍</span>
+            Click the map to mark the exact issue location
+          </div>
+
+          <div class="hintRow" style="margin-top: 6px;">
+            <p id="mapRequired" class="fieldHint required">* Required — click map to place marker</p>
+            <span></span>
+          </div>
+        </div>
+
+        <!-- ---- SECTION: ISSUE DETAILS ---- -->
+        <div class="form-section">
+          <div class="form-section-label">Issue Details</div>
+
+          <!-- Issue Type -->
+          <div class="input-wrapper">
+            <select id="issueType" required aria-required="true" aria-describedby="issueTypeHint">
+              <option value="" disabled selected></option>
+              <option value="Erosion">⛰️ Erosion</option>
+              <option value="Blowdown">🌳 Blowdown / Fallen Tree</option>
+              <option value="Invasives">🌿 Invasive Plants</option>
+              <option value="Drainage">💧 Drainage / Water Issue</option>
+              <option value="Safety">⚠️ Safety Hazard</option>
+              <option value="Infrastructure">🔧 Infrastructure Damage</option>
+              <option value="Other">❓ Other</option>
+            </select>
+            <label for="issueType">Issue Type</label>
+          </div>
+          <div class="hintRow">
+            <p id="issueTypeHint" class="fieldHint required" data-for="issueType">* Required</p>
+            <p class="formHelpText">What type of issue are you reporting?</p>
+          </div>
+
+          <!-- Severity -->
+          <div class="input-wrapper">
+            <select id="severity" aria-required="true" aria-describedby="severityHint">
+              <option value="" disabled selected></option>
+              <option value="Low">🟢 Low — Minor inconvenience, not urgent</option>
+              <option value="Medium">🟡 Medium — Needs attention soon</option>
+              <option value="High">🔴 High — Urgent safety concern</option>
+            </select>
+            <label for="severity">Severity</label>
+          </div>
+          <div class="hintRow">
+            <p id="severityHint" class="fieldHint required" data-for="severity">* Required</p>
+            <p class="formHelpText">How urgent is this issue?</p>
+          </div>
+
+          <!-- Description -->
+          <div class="input-wrapper">
+            <textarea id="description" rows="3" required aria-required="true" aria-describedby="descriptionHint"></textarea>
+            <label for="description">Description</label>
+          </div>
+          <div class="hintRow">
+            <p id="descriptionHint" class="fieldHint required" data-for="description">* Required</p>
+            <p class="formHelpText">Describe what you observed</p>
+          </div>
+        </div>
+
+        <!-- ---- SECTION: PHOTO ---- -->
+        <div class="form-section">
+          <div class="form-section-label">Photo <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-muted);">(optional)</span></div>
+
+          <div class="input-wrapper file-wrapper" style="margin-top: 0;">
+            <label for="photo" class="file-label visually-hidden">Attach photo</label>
+            <div class="file-row" id="fileDropZone" role="button" tabindex="0" aria-label="Click to attach a photo">
+              <button type="button" id="fakeFileBtn" aria-controls="photo">📷 Attach Photo</button>
+              <span id="fileName">No file chosen</span>
+            </div>
+            <input type="file" id="photo" accept="image/*" aria-label="Photo attachment" />
+          </div>
+          <p class="fieldHint optional" style="margin-top: 6px;">Attaching a photo helps staff better assess and prioritize the issue.</p>
+
+          <img id="photoPreview" class="hidden" alt="Photo preview" />
+        </div>
+
+        <!-- ---- SUBMIT ---- -->
+        <div class="submit-btn-wrapper">
+          <button id="submitBtn" type="button" disabled aria-disabled="true">
+            <span id="submitBtnText">Submit Issue Report</span>
+          </button>
+
+          <div id="statusMessage" class="status hidden" role="alert" aria-live="assertive"></div>
+        </div>
+
+      </div> <!-- /form-body -->
+    </div> <!-- /form-card -->
+
+  </main>
+
+  <!-- ===================================================
+       SUCCESS TOAST
+       =================================================== -->
+  <div id="successToast" class="toast hidden" role="status" aria-live="polite" aria-atomic="true">
+    <div class="toast-progress"></div>
+    <div class="toast-inner">
+      <div class="toast-icon" aria-hidden="true">✔</div>
+      <div class="toast-body">
+        <strong>Report submitted!</strong>
+        <p>Thank you — staff will review your report shortly.</p>
+      </div>
+      <button id="newReportBtn" class="toast-btn">New report</button>
     </div>
-    <button id="newReportBtn" class="toast-btn">Submit another</button>
   </div>
-</div>
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- ===================================================
+       SCRIPTS
+       =================================================== -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="sites.js"></script>
+  <script src="app.js"></script>
 
-<!-- Site configuration -->
-<script src="sites.js"></script>
-<script src="app.js"></script>
 
 </body>
 </html>

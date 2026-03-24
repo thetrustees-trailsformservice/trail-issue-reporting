@@ -1,7 +1,12 @@
-// WORKING VERSION BEFORE CHANGES
+/* =============================================================
+   TRAIL ISSUE REPORTING — app.js
+   Supports: index.html (form page) + issues.html (map page)
+   ============================================================= */
+
 document.addEventListener("DOMContentLoaded", () => {
-// ======================== CONFIG ======================== 
-const isFormPage = !!document.getElementById("map");
+
+// ======================== CONFIG ========================
+const isFormPage   = !!document.getElementById("map");
 const isIssuesPage = !!document.getElementById("issuesMap");
 
 const POWER_AUTOMATE_URL =
@@ -10,41 +15,102 @@ const POWER_AUTOMATE_URL =
 const ISSUES_GEOJSON_URL =
   "https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/d05f1cd01f824e8a86771bfe1e69ba1c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=o6rqskcqxVZdNtyo5Wj_-FL0W97sT9WPmQN_BZXO2rs";
 
-// ======================== GLOBALS ========================
+const MARK_COMPLETE_URL =
+  "https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5b136aad51c94c51a010f2dc4e6ed490/triggers/manual/paths/invoke?api-version=1";
+
+const SHAREPOINT_BASE =
+  "https://thetrustees.sharepoint.com/sites/SouthShoreRegionVolunteers/Lists/Trail%20Monitoring%20Reports/DispForm.aspx?ID=";
+
+// Auto-refresh interval in ms (5 minutes)
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
+// ======================== SHARED GLOBALS ========================
 let map;
-let marker = null;
-let boundaryLayer = null;
+let marker            = null;
+let boundaryLayer     = null;
 let boundaryShadowLayer = null;
-let isSubmitting = false;
-let trailsLayer = null;
-let issuesLayer = null;
-let activeMarker = null;
+let trailsLayer       = null;
+let issuesLayer       = null;
+let clusterGroup      = null;
+let activeMarker      = null;
+let isSubmitting      = false;
+let allFeatures       = [];
 let activeSeverityFilter = "all";
-let activeSearchTerm = "";
-let currentSortField = null;
-let currentSortDirection = "asc";
-let allFeatures = [];
+let activeSearchTerm  = "";
+let activeSiteFilter  = "";
 
-function setActiveMarker(marker) {
-  if (activeMarker && activeMarker !== marker) {
-    const prevFeature = activeMarker.feature;
-    activeMarker.setIcon(
-      createLeafletIssueIcon(prevFeature.issueType, prevFeature.severity)
-    );
-  }
-
-  activeMarker = marker;
-
-  const feature = marker.feature;
-
-  marker.setIcon(
-    createLeafletIssueIcon(feature.issueType, feature.severity, true)
-  );
-}
-// ======================== GEOJSON CACHE ========================
+// ======================== GEO JSON CACHE ========================
 const geoJsonCache = {};
 
-function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
+async function fetchGeoJson(url) {
+  if (!url) return null;
+  if (geoJsonCache[url]) return geoJsonCache[url];
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    geoJsonCache[url] = data;
+    return data;
+  } catch (err) {
+    console.warn("GeoJSON fetch failed:", url, err);
+    return null;
+  }
+}
+
+// ======================== ICON HELPERS ========================
+const severityColors = {
+  High:   "#c0392b",
+  Medium: "#d97706",
+  Low:    "#16a34a"
+};
+
+const issueIcons = {
+  Erosion:        "⛰️",
+  Blowdown:       "🌳",
+  Invasives:      "🌿",
+  Drainage:       "💧",
+  Safety:         "⚠️",
+  Infrastructure: "🔧",
+  Other:          "❓"
+};
+
+function createIssueSVG(issueType, severity, active = false) {
+  const fillColor = severityColors[severity] || "#64748b";
+  const icon      = issueIcons[issueType] || "❓";
+  const size      = active ? 36 : 28;
+  const r         = (size / 2) - 2;
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="${fillColor}" stroke="white" stroke-width="${active ? 2.5 : 2}"/>
+      ${active ? `<circle cx="${size/2}" cy="${size/2}" r="${r+3}" fill="none" stroke="${fillColor}" stroke-width="1.5" opacity="0.4"/>` : ''}
+      <text x="${size/2}" y="${size/2 + 5}" font-size="${active ? 16 : 13}" text-anchor="middle" fill="white" paint-order="stroke">${icon}</text>
+    </svg>`;
+}
+
+function createLeafletIssueIcon(issueType, severity, active = false) {
+  const size = active ? 36 : 28;
+  return L.divIcon({
+    className: "issue-icon",
+    html: createIssueSVG(issueType, severity, active),
+    iconSize:    [size, size],
+    iconAnchor:  [size / 2, size / 2],
+    popupAnchor: [0, -(size / 2) - 4]
+  });
+}
+
+function setActiveMarker(newMarker) {
+  if (activeMarker && activeMarker !== newMarker) {
+    const prev = activeMarker.feature;
+    activeMarker.setIcon(createLeafletIssueIcon(prev.issueType, prev.severity, false));
+  }
+  activeMarker = newMarker;
+  const f = newMarker.feature;
+  newMarker.setIcon(createLeafletIssueIcon(f.issueType, f.severity, true));
+}
+
+// ======================== BASE MAP ========================
+function initBaseMap(mapId, center, zoom) {
   const container = L.DomUtil.get(mapId);
   if (container && container._leaflet_id) return map;
 
@@ -56,6 +122,7 @@ function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
 
   map.doubleClickZoom.disable();
 
+  // Custom panes for z-order control
   map.createPane("boundaryPane");
   map.getPane("boundaryPane").style.zIndex = 400;
 
@@ -66,337 +133,93 @@ function initBaseMap(mapId, center = [41.8029231, -70.6108888], zoom = 8) {
   map.getPane("issuesPane").style.zIndex = 600;
   map.getPane("issuesPane").style.pointerEvents = "auto";
 
+  // Carto Voyager — clean, readable basemap
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
     updateWhenIdle: true,
     keepBuffer: 2
   }).addTo(map);
 
-  function highlightRow(issueId) {
-    document.querySelectorAll("#issuesTable tbody tr")
-      .forEach(r => r.classList.remove("active-row"));
-
-    const row = document.querySelector(
-      `#issuesTable tbody tr[data-id="${issueId}"]`
-    );
-
-    if (row) {
-      row.classList.add("active-row");
-      row.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }
-
   return map;
 }
 
+// ======================== SITE OVERLAYS ========================
 function clearSiteOverlays() {
   [boundaryLayer, boundaryShadowLayer, trailsLayer].forEach(layer => {
-    if (layer) map.removeLayer(layer);
+    if (layer && map.hasLayer(layer)) map.removeLayer(layer);
   });
+  boundaryLayer = boundaryShadowLayer = trailsLayer = null;
 }
-
-async function fetchGeoJson(url) {
-  if (!url) return null;
-
-  if (geoJsonCache[url]) {
-    return geoJsonCache[url];
-  }
-
-  const response = await fetch(url);
-  const data = await response.json();
-
-  geoJsonCache[url] = data;
-  return data;
-}
-
-// -------------------- Issue SVG & Unicode Icon Mapping --------------------
-const severityColors = {
-  High: "#d73027",
-  Medium: "#fc8d59",
-  Low: "#91cf60"
-};
-
-const issueIcons = {
-  Erosion: "⛰️",
-  Blowdown: "🌳",
-  Invasives: "🌿",
-  Drainage: "💧",
-  Safety: "⚠️",
-  Other: "❓"
-};
-
-function createIssueSVG(issueType, severity) {
-  const fillColor = severityColors[severity] || "#666";
-  const unicodeIcon = issueIcons[issueType] || "❓";
-
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-      <circle cx="14" cy="14" r="12" fill="${fillColor}" stroke="white" stroke-width="2"/>
-      <text x="14" y="18" font-size="14" text-anchor="middle" fill="black" stroke="white" stroke-width="0.5" paint-order="stroke">${unicodeIcon}</text>
-    </svg>
-  `;
-}
-
-function createLeafletIssueIcon(issueType, severity, active = false) {
-  const size = active ? 34 : 28;
-
-  return L.divIcon({
-    className: "issue-icon",
-    html: createIssueSVG(issueType, severity, active),
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -size / 2]
-  });
-}
-
 
 async function loadSiteBoundary(site, doZoom = true) {
   if (!site?.boundary) return;
-
   const geojson = await fetchGeoJson(site.boundary);
+  if (!geojson) return;
 
   boundaryShadowLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
-    style: { color: "#C4D600", weight: 8, opacity: 0.6, fillOpacity: 0 }
+    style: { color: "#C4D600", weight: 8, opacity: 0.5, fillOpacity: 0 }
   }).addTo(map);
 
   boundaryLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
-    style: { color: "#4B6F44", weight: 3, fillOpacity: 0.1 }
+    style: { color: "#4B6F44", weight: 2.5, fillOpacity: 0.08 }
   }).addTo(map);
 
   if (doZoom) {
     const bounds = boundaryLayer.getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [30, 30] });
-    }
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
   }
 }
 
 async function loadSiteTrails(site) {
   if (!site?.trails) return;
-
   const geojson = await fetchGeoJson(site.trails);
+  if (!geojson) return;
 
   trailsLayer = L.geoJSON(geojson, {
     pane: "trailsPane",
-    style: { color: "#8B5A2B", weight: 3, opacity: 0.9 }
+    style: { color: "#8B5A2B", weight: 3, opacity: 0.85 }
   }).addTo(map);
 }
 
 async function zoomToAllSites() {
   const layers = [];
-
   for (const site of Object.values(sites)) {
     if (site.boundary) {
       const geojson = await fetchGeoJson(site.boundary);
-      layers.push(L.geoJSON(geojson));
+      if (geojson) layers.push(L.geoJSON(geojson));
     }
   }
-
-  const group = L.featureGroup(layers);
+  if (!layers.length) return;
+  const group  = L.featureGroup(layers);
   const bounds = group.getBounds();
-
-  if (bounds.isValid()) {
-    map.fitBounds(bounds, { padding: [40, 40] });
-  }
+  if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
 }
 
-/* =========================================================
-   ===================== FORM PAGE =========================
-   ========================================================= */
-if (isFormPage) {
-// ======================== ELEMENTS ========================
-const siteSelect = document.getElementById("siteSelect");
-const submitBtn = document.getElementById("submitBtn");
-const statusMessage = document.getElementById("statusMessage");
-const photoInput = document.getElementById("photo");
-const photoPreview = document.getElementById("photoPreview");
-const issueType = document.getElementById("issueType");
-const severity = document.getElementById("severity");
-const description = document.getElementById("description");
-const fakeFileBtn = document.getElementById("fakeFileBtn");
-const fileNameEl = document.getElementById("fileName");
-const mapHint = document.getElementById("mapHint");
-
-submitBtn.disabled = true;
-
-// ======================== SUBMIT BUTTON CLICK ========================
-submitBtn.addEventListener("click", (e) => {
-  e.preventDefault();
-  submitIssue();
-});
-
-// ======================== STATUS HELPERS ========================
-function showStatus(message, type) {
-  if (!statusMessage) return;
-  statusMessage.textContent = message;
-  statusMessage.className = `status ${type}`;
-  statusMessage.classList.remove("hidden");
+// ======================== UTILITY ========================
+function getSeverityColor(severity) {
+  return severityColors[severity?.trim()] || "#64748b";
 }
 
-function clearStatus() {
-  if (!statusMessage) return;
-  statusMessage.className = "status hidden";
-  statusMessage.textContent = "";
+function formatIssueAge(isoDate) {
+  if (!isoDate) return "Unknown";
+  const diffMs   = Date.now() - new Date(isoDate);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7)   return `${diffDays}d ago`;
+  if (diffDays < 30)  return `${Math.floor(diffDays/7)}w ago`;
+  return `${Math.floor(diffDays/30)}mo ago`;
 }
 
-function showSuccessToast() {
-  const toast = document.getElementById("successToast");
-  if (!toast) return;
-  toast.classList.add("show");
-  toast.classList.remove("hidden");
-}
-
-function hideSuccessToast() {
-  const toast = document.getElementById("successToast");
-  if (!toast) return;
-  toast.classList.remove("show");
-  toast.classList.add("hidden");
-}
-
-function refreshFieldStates() {
-  document.querySelectorAll(".input-wrapper input, .input-wrapper textarea, .input-wrapper select")
-    .forEach(el => {
-      const wrapper = el.closest(".input-wrapper");
-      const requiredHint = document.querySelector(`.fieldHint.required[data-for="${el.id}"]`);
-      const filled = el.value.trim().length > 0;
-
-      wrapper?.classList.toggle("filled", filled);
-      requiredHint?.classList.toggle("hintHidden", filled);
-    });
-
-  updateMapRequiredState();
-}
-
-
-function resetForm() {
-  if (marker) map.removeLayer(marker);
-  marker = null;
-
-  clearSiteOverlays();
-
-  description.value = "";
-  photoInput.value = "";
-  photoPreview.classList.add("hidden");
-
-  submitBtn.disabled = true;
-  siteSelect.value = "";
-  issueType.value = "";
-  severity.value = "";
-  map.setView([41.8029231, -70.6108888], 8);
-
-  const mapHintEl = document.getElementById("mapHint");
-  if (mapHintEl) mapHintEl.classList.remove("hidden");
-
-  clearStatus();
-
-  updateMapRequiredState();
-  updateSubmitState();
-
-  refreshFieldStates();
-}
-
-function updateSubmitState() {
-  const hasMarker = !!marker;
-
-  submitBtn.disabled = !(
-    siteSelect.value &&
-    issueType.value &&
-    severity.value &&
-    description.value.trim() &&
-    hasMarker
-  );
-}
-
-siteSelect.addEventListener("change", async () => {
-  const site = sites[siteSelect.value];
-  if (!site) return;
-
-  clearSiteOverlays();
-  await loadSiteBoundary(site, true);
-  await loadSiteTrails(site);
-
-  if (marker) {
-    map.removeLayer(marker);
-    marker = null;
-  }
-
-  updateMapRequiredState();
-  updateSubmitState();
-});
-
-
-// REQUIRED FIELD LISTENERS
-siteSelect.addEventListener("change", updateSubmitState);
-issueType.addEventListener("change", updateSubmitState);
-severity.addEventListener("change", updateSubmitState);
-description.addEventListener("input", updateSubmitState);
-
-function updateMapRequiredState() {
-  const mapRequired = document.getElementById("mapRequired");
-  if (!mapRequired) return;
-
-  const hasMarker = !!marker;
-  mapRequired.classList.toggle("hintHidden", hasMarker);
-}
-
-
-// ======================== SITE DROPDOWN ========================
-Object.keys(sites).forEach(site => {
-  const opt = document.createElement("option");
-  opt.value = site;
-  opt.textContent = site;
-  siteSelect.appendChild(opt);
-});
-
-// ======================== MAP INIT ========================
-map = initBaseMap("map", [41.8029231, -70.6108888], 8);
-
-// ======================== MAP EVENTS ========================
-map.on("click", e => {
-  if (marker) map.removeLayer(marker);
-
-  marker = L.marker(e.latlng).addTo(map);
-
-  document.getElementById("mapHint")?.classList.add("hidden");
-
-  updateMapRequiredState();
-  updateSubmitState();
-});
-
-// ======================== PHOTO PREVIEW ========================
-fakeFileBtn.addEventListener("click", () => {
-  photoInput.click();
-});
-
-photoInput.addEventListener("change", () => {
-  const file = photoInput.files[0];
-
-  if (!file) {
-    fileNameEl.textContent = "No file chosen";
-    photoPreview.classList.add("hidden");
-    return;
-  }
-
-  fileNameEl.textContent = file.name;
-
-  const reader = new FileReader();
-  reader.onload = e => {
-    photoPreview.src = e.target.result;
-    photoPreview.classList.remove("hidden");
-  };
-  reader.readAsDataURL(file);
-});
-
-// ======================== BASE64 CONVERSION ========================
 function toBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsArrayBuffer(file);
     reader.onload = () => {
       const bytes = new Uint8Array(reader.result);
-      let binary = "";
+      let binary  = "";
       for (let b of bytes) binary += String.fromCharCode(b);
       resolve(btoa(binary));
     };
@@ -404,681 +227,747 @@ function toBase64(file) {
   });
 }
 
-// ======================== FLOATING LABELS ========================
-function initFloatingLabels() {
-  document.querySelectorAll(".input-wrapper input, .input-wrapper textarea, .input-wrapper select")
-    .forEach(el => {
-      const wrapper = el.closest(".input-wrapper");
-      const requiredHint = document.querySelector(
-        `.fieldHint.required[data-for="${el.id}"]`
-      );
+/* =========================================================
+   ==================== FORM PAGE ==========================
+   ========================================================= */
+if (isFormPage) {
 
-      function hasValue() {
-        if (el.tagName === "SELECT") {
-          return el.value !== "";
-        }
-        return el.value.trim().length > 0;
-      }
-
-      function updateState() {
-        const filled = hasValue();
-
-        wrapper.classList.toggle("filled", filled);
-
-        if (requiredHint) {
-          requiredHint.classList.toggle("hintHidden", filled);
-        }
-      }
-
-      el.addEventListener("focus", () => {
-        wrapper.classList.add("focussed");
-      });
-
-      el.addEventListener("blur", () => {
-        wrapper.classList.remove("focussed");
-        updateState();
-      });
-
-      el.addEventListener("input", updateState);
-      el.addEventListener("change", updateState);
-
-      updateState();
-    });
-
-
-}
-
-initFloatingLabels();
-
-function initHintVisibility() {
-  const requiredFields = [
-    { el: document.getElementById("siteSelect"), hint: document.querySelector("#siteHint") },
-    { el: document.getElementById("issueType"), hint: document.querySelector("#issueTypeHint") },
-    { el: document.getElementById("severity"), hint: document.querySelector("#severityHint") },
-    { el: document.getElementById("description"), hint: document.querySelector("#descriptionHint") }
-  ];
-
-  requiredFields.forEach(item => {
-    if (!item.el || !item.hint) return;
-
-    const check = () => {
-      if (item.el.value) item.hint.classList.add("hintHidden");
-      else item.hint.classList.remove("hintHidden");
-    };
-
-    item.el.addEventListener("input", check);
-    item.el.addEventListener("change", check);
-    check();
-  });
-}
-
-
-initHintVisibility();
-
-
-// ======================== SUBMIT ========================
-async function submitIssue() {
-  if (isSubmitting) return;
-  isSubmitting = true;
-
-  clearStatus();
-
-  if (!marker) {
-    showStatus("Please click the map to mark the issue location.", "error");
-    isSubmitting = false;
-    return;
-  }
+  const siteSelect  = document.getElementById("siteSelect");
+  const submitBtn   = document.getElementById("submitBtn");
+  const submitText  = document.getElementById("submitBtnText");
+  const statusMessage = document.getElementById("statusMessage");
+  const photoInput  = document.getElementById("photo");
+  const photoPreview = document.getElementById("photoPreview");
+  const issueType   = document.getElementById("issueType");
+  const severity    = document.getElementById("severity");
+  const description = document.getElementById("description");
+  const fakeFileBtn = document.getElementById("fakeFileBtn");
+  const fileNameEl  = document.getElementById("fileName");
 
   submitBtn.disabled = true;
-  submitBtn.textContent = "Submitting…";
 
-  let photoBase64 = null;
-  let photoBase64Name = null;
-
-  if (photoInput.files.length) {
-    const file = photoInput.files[0];
-    photoBase64 = await toBase64(file);
-    photoBase64Name = file.name;
-  }
-
-  const payload = {
-    site: siteSelect.value,
-    issueType: document.getElementById("issueType").value,
-    severity: document.getElementById("severity").value,
-    latitude: marker.getLatLng().lat,
-    longitude: marker.getLatLng().lng,
-    description: document.getElementById("description").value,
-    submittedAt: new Date().toISOString(),
-    photoBase64: photoBase64 ?? null,
-    photoBase64Name: photoBase64Name ?? null
-  };
-
-  try {
-  const response = await fetch(POWER_AUTOMATE_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+  // ---- Populate site dropdown ----
+  Object.keys(sites).sort().forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    siteSelect.appendChild(opt);
   });
 
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
+  // ---- Map init ----
+  map = initBaseMap("map", [41.8029231, -70.6108888], 8);
 
-    showSuccessToast();
-    resetForm();
+  // ---- Map click to place marker ----
+  map.on("click", e => {
+    if (marker) map.removeLayer(marker);
+    marker = L.marker(e.latlng, {
+      icon: L.divIcon({
+        className: "",
+        html: `<div style="
+          width:18px;height:18px;
+          background:#4B6F44;
+          border:3px solid white;
+          border-radius:50%;
+          box-shadow:0 2px 6px rgba(0,0,0,0.4);
+        "></div>`,
+        iconSize:    [18, 18],
+        iconAnchor:  [9, 9],
+        popupAnchor: [0, -12]
+      })
+    }).addTo(map);
 
-  } catch (err) {
-    console.error(err);
-    showStatus(
-      "Something went wrong while submitting. Please try again or contact staff.",
-      "error"
+    document.getElementById("mapHint")?.classList.add("hidden");
+    document.getElementById("map")?.classList.add("map-active");
+    updateMapRequiredState();
+    updateSubmitState();
+  });
+
+  // ---- Site change ----
+  siteSelect.addEventListener("change", async () => {
+    const site = sites[siteSelect.value];
+    if (!site) return;
+    clearSiteOverlays();
+    await loadSiteBoundary(site, true);
+    await loadSiteTrails(site);
+    if (marker) { map.removeLayer(marker); marker = null; }
+    updateMapRequiredState();
+    updateSubmitState();
+  });
+
+  // ---- Required field listeners ----
+  [siteSelect, issueType, severity].forEach(el => el.addEventListener("change", updateSubmitState));
+  description.addEventListener("input", updateSubmitState);
+
+  function updateSubmitState() {
+    const valid = !!(
+      siteSelect.value &&
+      issueType.value &&
+      severity.value &&
+      description.value.trim() &&
+      marker
     );
-  } finally {
-    isSubmitting = false;
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Submit Issue";
+    submitBtn.disabled = !valid;
+    submitBtn.setAttribute("aria-disabled", !valid);
   }
-}
 
-// ======================== TOAST HANDLING ========================
-const successToast = document.getElementById("successToast");
-const newReportBtn = document.getElementById("newReportBtn");
+  function updateMapRequiredState() {
+    const el = document.getElementById("mapRequired");
+    if (el) el.classList.toggle("hintHidden", !!marker);
+  }
 
-if (newReportBtn) {
-  newReportBtn.addEventListener("click", () => {
+  // ---- Photo upload ----
+  fakeFileBtn.addEventListener("click", () => photoInput.click());
+
+  // Allow clicking the whole file-row
+  document.getElementById("fileDropZone")?.addEventListener("click", e => {
+    if (e.target !== fakeFileBtn) photoInput.click();
+  });
+
+  photoInput.addEventListener("change", () => {
+    const file = photoInput.files[0];
+    if (!file) {
+      fileNameEl.textContent = "No file chosen";
+      photoPreview.classList.add("hidden");
+      return;
+    }
+    // Validate size (10MB)
+    if (file.size > 20 * 1024 * 1024) {
+      fileNameEl.textContent = "File too large (max 20MB)";
+      photoInput.value = "";
+      return;
+    }
+    fileNameEl.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+      photoPreview.src = e.target.result;
+      photoPreview.classList.remove("hidden");
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // ---- Submit ----
+  submitBtn.addEventListener("click", e => {
+    e.preventDefault();
+    submitIssue();
+  });
+
+  async function submitIssue() {
+    if (isSubmitting) return;
+    isSubmitting = true;
+    clearStatus();
+
+    if (!marker) {
+      showStatus("Please click the map to mark the issue location.", "error");
+      isSubmitting = false;
+      return;
+    }
+
+    submitBtn.disabled = true;
+    if (submitText) submitText.textContent = "Submitting…";
+
+    let photoBase64     = null;
+    let photoBase64Name = null;
+
+    if (photoInput.files.length) {
+      const file = photoInput.files[0];
+      photoBase64     = await toBase64(file);
+      photoBase64Name = file.name;
+    }
+
+    const payload = {
+      site:           siteSelect.value,
+      issueType:      issueType.value,
+      severity:       severity.value,
+      latitude:       marker.getLatLng().lat,
+      longitude:      marker.getLatLng().lng,
+      description:    description.value.trim(),
+      submittedAt:    new Date().toISOString(),
+      photoBase64:    photoBase64 ?? null,
+      photoBase64Name: photoBase64Name ?? null
+    };
+
+    try {
+      const response = await fetch(POWER_AUTOMATE_URL, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      showSuccessToast();
+      resetForm();
+
+    } catch (err) {
+      console.error("Submit error:", err);
+      showStatus("Something went wrong. Please try again or contact staff.", "error");
+    } finally {
+      isSubmitting = false;
+      submitBtn.disabled = false;
+      if (submitText) submitText.textContent = "Submit Issue Report";
+    }
+  }
+
+  // ---- Status helpers ----
+  function showStatus(message, type) {
+    if (!statusMessage) return;
+    statusMessage.textContent = message;
+    statusMessage.className = `status ${type}`;
+    statusMessage.classList.remove("hidden");
+    statusMessage.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function clearStatus() {
+    if (!statusMessage) return;
+    statusMessage.className = "status hidden";
+    statusMessage.textContent = "";
+  }
+
+  // ---- Toast ----
+  function showSuccessToast() {
+    const toast = document.getElementById("successToast");
+    if (!toast) return;
+    toast.classList.remove("hidden");
+    requestAnimationFrame(() => toast.classList.add("show"));
+    // Auto-dismiss after 7s
+    setTimeout(() => hideSuccessToast(), 7000);
+  }
+
+  function hideSuccessToast() {
+    const toast = document.getElementById("successToast");
+    if (!toast) return;
+    toast.classList.remove("show");
+    setTimeout(() => toast.classList.add("hidden"), 400);
+  }
+
+  document.getElementById("newReportBtn")?.addEventListener("click", () => {
     resetForm();
     hideSuccessToast();
   });
-}
 
-}
+  // ---- Reset form ----
+  function resetForm() {
+    if (marker) { map.removeLayer(marker); marker = null; }
+    clearSiteOverlays();
+    [description, photoInput].forEach(el => { if (el) el.value = ""; });
+    photoPreview.classList.add("hidden");
+    submitBtn.disabled = true;
+    siteSelect.value = "";
+    issueType.value  = "";
+    severity.value   = "";
+    map.setView([41.8029231, -70.6108888], 8);
+    document.getElementById("mapHint")?.classList.remove("hidden");
+    document.getElementById("map")?.classList.remove("map-active");
+    clearStatus();
+    updateMapRequiredState();
+    updateSubmitState();
+    refreshFieldStates();
+  }
+
+  // ---- Floating labels ----
+  function initFloatingLabels() {
+    document.querySelectorAll(".input-wrapper input, .input-wrapper textarea, .input-wrapper select")
+      .forEach(el => {
+        const wrapper      = el.closest(".input-wrapper");
+        const requiredHint = document.querySelector(`.fieldHint.required[data-for="${el.id}"]`);
+
+        function hasValue() {
+          return el.tagName === "SELECT" ? el.value !== "" : el.value.trim().length > 0;
+        }
+        function update() {
+          wrapper?.classList.toggle("filled", hasValue());
+          requiredHint?.classList.toggle("hintHidden", hasValue());
+        }
+        el.addEventListener("focus",  () => wrapper?.classList.add("focussed"));
+        el.addEventListener("blur",   () => { wrapper?.classList.remove("focussed"); update(); });
+        el.addEventListener("input",  update);
+        el.addEventListener("change", update);
+        update();
+      });
+  }
+
+  function refreshFieldStates() {
+    document.querySelectorAll(".input-wrapper input, .input-wrapper textarea, .input-wrapper select")
+      .forEach(el => {
+        const wrapper = el.closest(".input-wrapper");
+        const hint    = document.querySelector(`.fieldHint.required[data-for="${el.id}"]`);
+        const filled  = el.tagName === "SELECT" ? el.value !== "" : el.value.trim().length > 0;
+        wrapper?.classList.toggle("filled", filled);
+        hint?.classList.toggle("hintHidden", filled);
+      });
+    updateMapRequiredState();
+  }
+
+  initFloatingLabels();
+
+} // end isFormPage
+
 
 /* =========================================================
    ==================== ISSUES PAGE ========================
    ========================================================= */
 if (isIssuesPage) {
-  // ======================== UTILITY ========================
-  let activeIssueId = null;
 
-  function getSeverityColor(severity) {
-    if (!severity) return "#999";
+  // ---- Map init ----
+  map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
 
-    const s = severity.trim();
-    if (s === "High") return "#d73027";
-    if (s === "Medium") return "#fc8d59";
-    if (s === "Low") return "#91cf60";
-    return "#999";
-  }
+  // ---- Load all site boundaries + trails on the issues map ----
+  Object.values(sites).forEach(site => {
+    if (site.boundary) loadSiteBoundary(site, false);
+    if (site.trails)   loadSiteTrails(site);
+  });
 
-  function formatIssueAge(isoDate) {
-  if (!isoDate) return "Unknown";
+  // ---- Populate site filter ----
+  const siteFilter = document.getElementById("siteFilter");
+  Object.keys(sites).sort().forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    siteFilter.appendChild(opt);
+  });
 
-  const submitted = new Date(isoDate);
-  const now = new Date();
-  const diffMs = now - submitted;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  // ---- Site filter change ----
+  siteFilter.addEventListener("change", async () => {
+    activeSiteFilter = siteFilter.value;
+    map.closePopup();
+    clearSiteOverlays();
 
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "1 day ago";
-  return `${diffDays} days ago`;
-}
-
-// ======================== INIT MAP ========================
-map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
-
-// ======================== LOAD ALL SITE BOUNDARIES + TRAILS (ISSUES MAP ONLY) ========================
-Object.values(sites).forEach(site => {
-  if (site.boundary) {
-    loadSiteBoundary(site, false);
-  }
-  if (site.trails) {
-    loadSiteTrails(site);
-  }
-});
-
-// ======================== LOAD ISSUES ========================
-async function loadIssues(map) {
-  const markerIndex = {};
-  const geojson = await fetchOpenIssues();
-  if (!geojson) return;
-  allFeatures = geojson.features;
-
-  if (issuesLayer) {
-    map.removeLayer(issuesLayer);
-  }
-
-  // Keep reference to table rows
-  const rowsById = {};
-
-  issuesLayer = L.geoJSON(geojson, {
-    pointToLayer: (feature, latlng) => {
-      const icon = createLeafletIssueIcon(feature.issueType, feature.severity);
-      const marker = L.marker(latlng, { icon, pane: "issuesPane" });
-
-      markerIndex[feature.id] = marker;
-
-      marker.feature = feature;
-
-      marker.on("click", () => {
-        setActiveMarker(marker);
-
-        // Highlight table row
-        const row = rowsById[feature.id];
-        if (row) {
-          Object.values(rowsById).forEach(r => r.classList.remove("active-row"));
-          row.classList.add("active-row");
-          row.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
-
-        // Fly to marker
-        const targetZoom = 16;
-        const point = map.project(marker.getLatLng(), targetZoom);
-        point.y -= 120;
-        const offsetLatLng = map.unproject(point, targetZoom);
-
-        map.flyTo(offsetLatLng, targetZoom, {
-          animate: true,
-          duration: 0.6
-        });
-
-        map.once("moveend", () => marker.openPopup());
-      });
-
-      return marker;
-    },
-    onEachFeature: (feature, layer) => {
-      const p = feature;
-      const severityColor = getSeverityColor(p.severity);
-      const sharepointUrl = `https://thetrustees.sharepoint.com/sites/SouthShoreRegionVolunteers/Lists/Trail%20Monitoring%20Reports/DispForm.aspx?ID=${p.id}`;
-      const photoAdded = p.photoUrl ? `<a href="${p.photoUrl}" target="_blank">View Image</a>` : "No";
-
-      layer.bindPopup(
-        `<div class="popup-content">
-          <div class="popup-header">${p.issueType} — ${p.site}</div>
-          <div class="popup-row">
-            <span class="popup-label">Issue:</span>
-            <span class="popup-value">${p.issueType}</span>
-          </div>
-          <div class="popup-row">
-            <span class="popup-label">Severity:</span>
-            <span class="popup-value" style="color:${severityColor}">${p.severity}</span>
-          </div>
-          <div class="popup-row">
-            <span class="popup-label">Reported:</span>
-            <span class="popup-value">${formatIssueAge(p.submittedAt)}</span>
-          </div>
-          <div class="popup-row">
-            <span class="popup-label">Description:</span>
-            <span class="popup-value">${p.description || "<em>No description</em>"}</span>
-          </div>
-          <div class="popup-row">
-            <span class="popup-label">Photo:</span>
-            <span class="popup-value">${photoAdded}</span>
-          </div>
-          <div class="popup-row">
-            <button onclick="window.open('${sharepointUrl}', '_blank')" class="popup-button view-btn">View in SharePoint</button>
-          </div>
-          <div class="popup-row">
-            <button onclick="markCompleted(${p.id}, this)" class="popup-button complete-btn">Mark Completed</button>
-          </div>
-        </div>`,
-        { className: `custom-popup severity-${p.severity.toLowerCase()}`, maxWidth: 340, minWidth: 240, autoPan: false, keepInView: false, closeButton: true, closeOnMove: false, offset: [0, -10] }
-      );
-
-      layer.on("popupopen", () => {
-        setActiveMarker(layer);
-
-        // Highlight row
-        const row = rowsById[feature.id];
-        if (row) {
-          Object.values(rowsById).forEach(r => r.classList.remove("active-row"));
-          row.classList.add("active-row");
-          row.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
-      });
-    }
-  }).addTo(map);
-
-  // ================= TABLE SYSTEM =================
-    const container = document.getElementById("issuesTableContainer");
-    container.innerHTML = "";
-
-    const table = document.createElement("table");
-    table.className = "issues-table";
-
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th data-field="site" class="sortable">Site ▲▼</th>
-          <th data-field="issueType" class="sortable">Issue ▲▼</th>
-          <th data-field="severity" class="sortable">Severity ▲▼</th>
-          <th data-field="submittedAt" class="sortable">Age ▲▼</th>
-        </tr>
-      </thead>
-    `;
-
-    const tbody = document.createElement("tbody");
-    table.appendChild(tbody);
-    container.appendChild(table);
-
-    // ---------------- APPLY FILTER + SORT + RENDER ----------------
-
-    function renderTable() {
-
-      tbody.innerHTML = "";
-      const rowsById = {};
-
-      let filtered = allFeatures.filter(f => {
-
-        const matchesSeverity =
-          activeSeverityFilter === "all" ||
-          f.severity.toLowerCase() === activeSeverityFilter;
-
-        const matchesSearch =
-          f.site.toLowerCase().includes(activeSearchTerm) ||
-          f.issueType.toLowerCase().includes(activeSearchTerm) ||
-          (f.description || "").toLowerCase().includes(activeSearchTerm);
-
-        return matchesSeverity && matchesSearch;
-      });
-
-      if (currentSortField) {
-        filtered.sort((a, b) => {
-
-          let valA = a[currentSortField] ?? "";
-          let valB = b[currentSortField] ?? "";
-
-          if (currentSortField === "submittedAt") {
-            valA = new Date(valA);
-            valB = new Date(valB);
-          }
-
-          if (typeof valA === "string") {
-            valA = valA.toLowerCase();
-            valB = valB.toLowerCase();
-          }
-
-          if (valA < valB) return currentSortDirection === "asc" ? -1 : 1;
-          if (valA > valB) return currentSortDirection === "asc" ? 1 : -1;
-          return 0;
-        });
+    if (!activeSiteFilter) {
+      zoomToAllSites();
+    } else {
+      const site = sites[activeSiteFilter];
+      if (site) {
+        await loadSiteBoundary(site, true);
+        await loadSiteTrails(site);
       }
-
-      filtered.forEach(f => {
-
-        const row = document.createElement("tr");
-        row.dataset.id = f.id;
-
-        row.innerHTML = `
-          <td>${f.site}</td>
-          <td>${f.issueType}</td>
-          <td><span class="badge ${f.severity?.trim().toLowerCase()}">${f.severity}</span></td>
-          <td>${formatIssueAge(f.submittedAt)}</td>
-        `;
-
-        row.addEventListener("click", () => {
-          const marker = markerIndex[f.id];
-          if (!marker) return;
-
-          setActiveMarker(marker);
-
-          document.querySelectorAll(".issues-table tr")
-            .forEach(r => r.classList.remove("active-row"));
-
-          row.classList.add("active-row");
-
-          const targetZoom = 16;
-          const point = map.project(marker.getLatLng(), targetZoom);
-          point.y -= 120;
-          const offsetLatLng = map.unproject(point, targetZoom);
-
-          map.flyTo(offsetLatLng, targetZoom, { animate: true, duration: 0.6 });
-
-          map.once("moveend", () => marker.openPopup());
-        });
-
-        rowsById[f.id] = row;
-        tbody.appendChild(row);
-      });
-
-      updateSummary(filtered);
     }
 
-    // ---------------- SORT HEADERS ----------------
+    renderCards();
+    updateMarkerVisibility();
+  });
 
-    table.querySelectorAll(".sortable").forEach(th => {
-      th.addEventListener("click", () => {
-
-        const field = th.dataset.field;
-
-        if (currentSortField === field) {
-          currentSortDirection =
-            currentSortDirection === "asc" ? "desc" : "asc";
-        } else {
-          currentSortField = field;
-          currentSortDirection = "asc";
-        }
-
-        updateSortIndicators();
-        renderTable();
+  // ---- Severity filter buttons ----
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter-btn").forEach(b => {
+        b.classList.remove("active");
+        b.setAttribute("aria-pressed", "false");
       });
+      btn.classList.add("active");
+      btn.setAttribute("aria-pressed", "true");
+      activeSeverityFilter = btn.dataset.severity;
+      renderCards();
+      updateMarkerVisibility();
     });
+  });
 
-    function updateSortIndicators() {
-      table.querySelectorAll(".sortable").forEach(th => {
-        const field = th.dataset.field;
-        const base = th.innerText.split(" ")[0];
+  // ---- Search ----
+  document.getElementById("issue-search")?.addEventListener("input", e => {
+    activeSearchTerm = e.target.value.toLowerCase().trim();
+    renderCards();
+    updateMarkerVisibility();
+  });
 
-        if (field === currentSortField) {
-          th.innerText = base + (currentSortDirection === "asc" ? " ▲" : " ▼");
-        } else {
-          th.innerText = base + " ▲▼";
-        }
-      });
-    }
-
-    // ---------------- FILTER BUTTONS ----------------
-
-    document.querySelectorAll(".filter-btn").forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll(".filter-btn")
-          .forEach(b => b.classList.remove("active"));
-
-        btn.classList.add("active");
-
-        activeSeverityFilter = btn.dataset.severity;
-        renderTable();
-      };
-    });
-
-    // ---------------- SEARCH ----------------
-
-    document.getElementById("issue-search")
-      .addEventListener("input", e => {
-        activeSearchTerm = e.target.value.toLowerCase();
-        renderTable();
-      });
-
-    // ---------------- SUMMARY ----------------
-
-    function updateSummary(filtered) {
-
-      const high = allFeatures.filter(f => f.severity.toLowerCase() === "high").length;
-      const medium = allFeatures.filter(f => f.severity.toLowerCase() === "medium").length;
-      const low = allFeatures.filter(f => f.severity.toLowerCase() === "low").length;
-
-      document.getElementById("issue-summary").innerText =
-        `Total: ${allFeatures.length} | High: ${high} | Medium: ${medium} | Low: ${low} | Showing: ${filtered.length}`;
-    }
-
-    // Initial render
-    renderTable();
-}
-
-
+  // ======================== FETCH + RENDER ========================
   async function fetchOpenIssues() {
+    setRefreshState("loading");
     try {
       const res = await fetch(ISSUES_GEOJSON_URL);
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-
-      if (!json?.data || !json.data.features) {
-        console.warn("No issues returned or invalid GeoJSON. Falling back to empty FeatureCollection.");
+      if (!json?.data?.features) {
+        console.warn("Invalid GeoJSON response, using empty collection");
         return { type: "FeatureCollection", features: [] };
       }
-
+      setRefreshState("live");
       return json.data;
     } catch (err) {
-      console.error("Failed to load issues", err);
+      console.error("Failed to load issues:", err);
+      setRefreshState("error");
       return { type: "FeatureCollection", features: [] };
     }
   }
 
-  async function markCompleted(id, button) {
-    try {
-      button.disabled = true;
-      button.textContent = "Updating…";
+  function setRefreshState(state) {
+    const dot   = document.getElementById("refreshDot");
+    const label = document.getElementById("refreshLabel");
+    const ind   = document.getElementById("refreshIndicator");
+    if (!dot || !label || !ind) return;
 
-      const res = await fetch("https://default912a785a67cc420da3dce817f6ff7b.fc.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5b136aad51c94c51a010f2dc4e6ed490/triggers/manual/paths/invoke?api-version=1", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ID: id })
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      issuesLayer.eachLayer(layer => {
-        if (layer.feature.id === id) {
-          issuesLayer.removeLayer(layer);
-        }
-      });
-
-    } catch (err) {
-      console.error(err);
-      alert("Failed to mark completed. Please try again.");
-      button.disabled = false;
-      button.textContent = "Mark Completed";
+    ind.classList.toggle("loading", state === "loading");
+    if (state === "loading") {
+      label.textContent = "Loading…";
+    } else if (state === "live") {
+      label.textContent = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+    } else {
+      label.textContent = "Load error";
+      dot.style.background = "var(--severity-high)";
     }
   }
 
-  // ======================== SITE FILTER ========================
-  const siteFilter = document.getElementById("siteFilter");
+  // ======================== MARKER MAP ========================
+  const markerById = {};
 
-  Object.keys(sites).forEach(siteName => {
-    const opt = document.createElement("option");
-    opt.value = siteName;
-    opt.textContent = siteName;
-    siteFilter.appendChild(opt);
-  });
+  async function loadIssues() {
+    const geojson = await fetchOpenIssues();
+    allFeatures   = geojson.features || [];
 
-  siteFilter.addEventListener("change", async () => {
-    const selected = siteFilter.value;
-    map.closePopup();
-    clearSiteOverlays();
+    // Remove old layers / clusters
+    if (clusterGroup) map.removeLayer(clusterGroup);
+    clusterGroup = null;
+    // Remove any individual site cluster groups from previous load
+    if (map._siteClusterGroups) {
+      map._siteClusterGroups.forEach(g => map.removeLayer(g));
+    }
+    map._siteClusterGroups = [];
 
-    if (!selected) {
-      zoomToAllSites();
+    // Remove loading message
+    const loadingMsg = document.getElementById("loadingMsg");
+    if (loadingMsg) loadingMsg.remove();
 
-      issuesLayer.eachLayer(layer => {
-        layer.setStyle({ opacity: 1, fillOpacity: 0.85 });
+    // ---- SITE-BASED CLUSTERING ----
+    // Group features by site name, then create one MarkerClusterGroup per site.
+    // disableClusteringAtZoom controls the zoom at which markers within that
+    // site pop out of the cluster — set to match roughly "zoomed in to site" level.
+    const useCluster = typeof L.markerClusterGroup === "function";
+
+    // Bucket features by site
+    const bySite = {};
+    allFeatures.forEach(feature => {
+      const siteName = feature.site || "__unknown__";
+      if (!bySite[siteName]) bySite[siteName] = [];
+      bySite[siteName].push(feature);
+    });
+
+    Object.entries(bySite).forEach(([siteName, features]) => {
+      let group;
+
+      if (useCluster) {
+        // Each site gets its own cluster group.
+        // disableClusteringAtZoom: when zoomed in past this level, all markers
+        // in the site show individually. 14 corresponds to "zoomed to site" level.
+        group = L.markerClusterGroup({
+          chunkedLoading: true,
+          showCoverageOnHover: false,
+          disableClusteringAtZoom: 14,
+          // Large enough radius to keep a full site collapsed at regional zoom,
+          // but markers will still split once disableClusteringAtZoom kicks in.
+          maxClusterRadius: zoom => zoom < 12 ? 120 : 60,
+          iconCreateFunction: cluster => {
+            const children  = cluster.getAllChildMarkers();
+            const hasHigh   = children.some(m => m.feature?.severity === "High");
+            const hasMedium = children.some(m => m.feature?.severity === "Medium");
+            const bgColor   = hasHigh ? "#c0392b" : hasMedium ? "#d97706" : "#16a34a";
+            const count     = cluster.getChildCount();
+            const label     = siteName === "__unknown__" ? "?" : siteName.split(" ")[0];
+            return L.divIcon({
+              className: "",
+              html: `
+                <div style="
+                  min-width:42px;
+                  height:42px;
+                  background:${bgColor};
+                  color:white;
+                  border-radius:8px;
+                  display:flex;
+                  flex-direction:column;
+                  align-items:center;
+                  justify-content:center;
+                  padding:0 8px;
+                  border:2px solid white;
+                  box-shadow:0 2px 8px rgba(0,0,0,0.35);
+                  font-family:var(--font-sans,sans-serif);
+                  gap:1px;
+                ">
+                  <span style="font-size:14px;font-weight:700;line-height:1;">${count}</span>
+                  <span style="font-size:8px;font-weight:600;opacity:.85;line-height:1;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis;">${label}</span>
+                </div>`,
+              iconSize:   [42, 42],
+              iconAnchor: [21, 21]
+            });
+          }
+        });
+        map._siteClusterGroups.push(group);
+        map.addLayer(group);
+      }
+
+      features.forEach(feature => {
+        const coords = feature.geometry?.coordinates;
+        if (!coords) return;
+
+        const latlng = L.latLng(coords[1], coords[0]);
+        const icon   = createLeafletIssueIcon(feature.issueType, feature.severity);
+        const m      = L.marker(latlng, { icon, pane: "issuesPane" });
+        m.feature    = feature;
+
+        m.on("click", () => {
+          setActiveMarker(m);
+          flyToMarker(m);
+          highlightCard(feature.id);
+          map.once("moveend", () => m.openPopup());
+        });
+
+        m.bindPopup(() => buildPopupContent(feature), {
+          className: `custom-popup severity-${feature.severity?.toLowerCase()}`,
+          maxWidth: 300,
+          autoPan: true,
+          autoPanPaddingTopLeft: [10, 10]
+        });
+
+        markerById[feature.id] = m;
+
+        if (useCluster && group) {
+          group.addLayer(m);
+        } else {
+          m.addTo(map);
+        }
       });
+    });
 
+    // Update stats
+    updateStats(allFeatures);
+
+    // Render cards
+    renderCards();
+  }
+
+  function flyToMarker(marker) {
+    const zoom  = 16;
+    const point = map.project(marker.getLatLng(), zoom);
+    point.y    -= 100;
+    map.flyTo(map.unproject(point, zoom), zoom, { animate: true, duration: 0.6 });
+  }
+
+  // ======================== POPUP BUILDER ========================
+  function buildPopupContent(f) {
+    const icon      = issueIcons[f.issueType] || "❓";
+    const sevLower  = (f.severity || "").toLowerCase();
+    const spUrl     = SHAREPOINT_BASE + f.id;
+    const hasPhoto  = !!f.photoUrl;
+
+    const container = document.createElement("div");
+    container.innerHTML = `
+      <div class="popup-header-band severity-${sevLower}">
+        <span class="popup-issue-icon">${icon}</span>
+        <div>
+          <div class="popup-issue-title">${f.issueType || "Unknown Issue"}</div>
+          <div class="popup-issue-subtitle">${f.site || "Unknown Site"}</div>
+        </div>
+      </div>
+
+      ${hasPhoto ? `<img class="popup-photo" src="${f.photoUrl}" alt="Issue photo" loading="lazy" />` : ""}
+
+      <div class="popup-body">
+        <div class="popup-row">
+          <span class="popup-label">Severity</span>
+          <span class="popup-value">
+            <span class="badge ${sevLower}">${f.severity || "—"}</span>
+          </span>
+        </div>
+        <div class="popup-row">
+          <span class="popup-label">Reported</span>
+          <span class="popup-value">${formatIssueAge(f.submittedAt)}</span>
+        </div>
+        ${f.description ? `
+        <div class="popup-description">${escapeHtml(f.description)}</div>
+        ` : ""}
+      </div>
+
+      <div class="popup-actions">
+        <a href="${spUrl}" target="_blank" rel="noopener noreferrer" class="popup-btn view-btn">
+          📄 View in SharePoint
+        </a>
+        <button class="popup-btn complete-btn" data-id="${f.id}">
+          ✔ Mark Done
+        </button>
+      </div>
+    `;
+
+    // Wire up complete button
+    container.querySelector(".complete-btn")?.addEventListener("click", async function() {
+      await markCompleted(f.id, this);
+    });
+
+    return container;
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // ======================== MARK COMPLETED ========================
+  async function markCompleted(id, button) {
+    if (!confirm("Mark this issue as completed and remove it from the map?")) return;
+
+    button.disabled    = true;
+    button.textContent = "Updating…";
+
+    try {
+      const res = await fetch(MARK_COMPLETE_URL, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ ID: id })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      // Remove from map
+      const m = markerById[id];
+      if (m) {
+        if (clusterGroup) clusterGroup.removeLayer(m);
+        else map.removeLayer(m);
+        delete markerById[id];
+      }
+
+      // Remove from data + re-render
+      allFeatures = allFeatures.filter(f => f.id !== id);
+      map.closePopup();
+      updateStats(allFeatures);
+      renderCards();
+
+    } catch (err) {
+      console.error("markCompleted error:", err);
+      alert("Failed to mark as completed. Please try again.");
+      button.disabled    = false;
+      button.textContent = "✔ Mark Done";
+    }
+  }
+
+  // ======================== STATS ========================
+  function updateStats(features) {
+    const high   = features.filter(f => f.severity?.trim() === "High").length;
+    const medium = features.filter(f => f.severity?.trim() === "Medium").length;
+    const low    = features.filter(f => f.severity?.trim() === "Low").length;
+
+    document.getElementById("statTotal") .textContent = features.length;
+    document.getElementById("statHigh")  .textContent = high;
+    document.getElementById("statMedium").textContent = medium;
+    document.getElementById("statLow")   .textContent = low;
+  }
+
+  // ======================== CARD LIST ========================
+  function getFilteredFeatures() {
+    return allFeatures.filter(f => {
+      const sevOk  = activeSeverityFilter === "all" ||
+                     f.severity?.toLowerCase() === activeSeverityFilter;
+      const siteOk = !activeSiteFilter || f.site === activeSiteFilter;
+      const q      = activeSearchTerm;
+      const textOk = !q || [f.issueType, f.site, f.description, f.severity]
+                      .some(v => v?.toLowerCase().includes(q));
+      return sevOk && siteOk && textOk;
+    });
+  }
+
+  function renderCards() {
+    const list     = document.getElementById("issuesList");
+    const features = getFilteredFeatures();
+
+    // Sort: High first, then by date (newest first)
+    const severityOrder = { High: 0, Medium: 1, Low: 2 };
+    features.sort((a, b) => {
+      const sd = (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3);
+      if (sd !== 0) return sd;
+      return new Date(b.submittedAt) - new Date(a.submittedAt);
+    });
+
+    // Clear existing cards (preserve loading msg if present)
+    list.querySelectorAll(".issue-card").forEach(c => c.remove());
+
+    if (features.length === 0) {
+      if (!list.querySelector(".no-results")) {
+        list.innerHTML = `
+          <div class="no-results">
+            <div class="no-results-icon">🔍</div>
+            <div>No issues match your current filters.</div>
+          </div>`;
+      }
       return;
     }
 
-    const site = sites[selected];
-    if (!site) return;
+    // Remove no-results if present
+    list.querySelector(".no-results")?.remove();
 
-    await loadSiteBoundary(site, true);
-    await loadSiteTrails(site);
-
-    issuesLayer.eachLayer(layer => {
-      const match = layer.feature.site === selected;
-      layer.setStyle({
-        opacity: match ? 1 : 0,
-        fillOpacity: match ? 0.85 : 0
-      });
-      if (!match) layer.closePopup();
-    });
-  });
-
-// ======================== INITIAL LOAD + AUTO-REFRESH ========================
-  loadIssues(map);
-}
-// ======================== ISSUES TABLE ========================
-function buildIssuesTable(geojson, markerIndex) {
-  const container = document.getElementById("issuesTableContainer");
-  container.innerHTML = "";
-
-  // Keep a reference for sorting and rows
-  let currentIssues = geojson.features;
-  let currentSort = { field: null, asc: true };
-  const rowsById = {};
-
-  const table = document.createElement("table");
-  table.className = "issues-table";
-
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th data-field="site">Site</th>
-        <th data-field="issueType">Issue</th>
-        <th data-field="severity">Severity</th>
-        <th data-field="submittedAt">Age</th>
-      </tr>
-    </thead>
-  `;
-
-  const tbody = document.createElement("tbody");
-  table.appendChild(tbody);
-  container.appendChild(table);
-
-  function renderTable(features) {
-    tbody.innerHTML = "";
+    const fragment = document.createDocumentFragment();
 
     features.forEach(f => {
-      const row = document.createElement("tr");
-      row.dataset.id = f.id;
+      const sevLower = (f.severity || "").toLowerCase();
+      const icon     = issueIcons[f.issueType] || "❓";
+      const card     = document.createElement("div");
 
-      row.innerHTML = `
-        <td>${f.site}</td>
-        <td>${f.issueType}</td>
-        <td><span class="badge ${f.severity?.trim().toLowerCase()}">${f.severity}</span></td>
-        <td>${formatIssueAge(f.submittedAt)}</td>
+      card.className    = `issue-card severity-${sevLower}`;
+      card.dataset.id   = f.id;
+      card.setAttribute("role", "listitem");
+      card.setAttribute("tabindex", "0");
+      card.setAttribute("aria-label", `${f.issueType} at ${f.site}, ${f.severity} severity`);
+
+      card.innerHTML = `
+        <div class="issue-card-icon">${icon}</div>
+        <div class="issue-card-body">
+          <div class="issue-card-top">
+            <span class="issue-card-type">${f.issueType || "Unknown"}</span>
+            <span class="badge ${sevLower}">${f.severity || "—"}</span>
+          </div>
+          <div class="issue-card-site">📍 ${f.site || "Unknown site"}</div>
+          ${f.description ? `<div class="issue-card-desc">${escapeHtml(f.description)}</div>` : ""}
+          <div class="issue-card-footer">
+            <span class="issue-card-age">${formatIssueAge(f.submittedAt)}</span>
+          </div>
+        </div>
       `;
 
-      // Store row by feature id
-      rowsById[f.id] = row;
+      const activate = () => {
+        const m = markerById[f.id];
+        if (!m) return;
+        setActiveMarker(m);
+        flyToMarker(m);
+        highlightCard(f.id);
+        map.once("moveend", () => m.openPopup());
+      };
 
-      row.addEventListener("click", () => {
-        const marker = markerIndex[f.id];
-        if (!marker) return;
+      card.addEventListener("click",   activate);
+      card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") activate(); });
 
-        // Highlight active row
-        highlightRow(f.id);
-
-        setActiveMarker(marker);
-
-        const targetZoom = 16;
-        const latlng = marker.getLatLng();
-
-        const point = map.project(latlng, targetZoom);
-        point.y -= 120;
-
-        const offsetLatLng = map.unproject(point, targetZoom);
-
-        map.flyTo(offsetLatLng, targetZoom, { animate: true, duration: 0.6 });
-
-        map.once("moveend", () => marker.openPopup());
-      });
-
-      tbody.appendChild(row);
+      fragment.appendChild(card);
     });
+
+    list.appendChild(fragment);
   }
 
-  function sortTable(field) {
-    if (currentSort.field === field) {
-      currentSort.asc = !currentSort.asc;
-    } else {
-      currentSort.field = field;
-      currentSort.asc = true;
+  function highlightCard(id) {
+    document.querySelectorAll(".issue-card").forEach(c => c.classList.remove("active-card"));
+    const card = document.querySelector(`.issue-card[data-id="${id}"]`);
+    if (card) {
+      card.classList.add("active-card");
+      card.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
+  }
 
-    const sorted = [...currentIssues].sort((a, b) => {
-      let valA = a[field] ?? "";
-      let valB = b[field] ?? "";
-
-      if (field === "submittedAt") {
-        valA = new Date(valA);
-        valB = new Date(valB);
-      }
-
-      if (valA < valB) return currentSort.asc ? -1 : 1;
-      if (valA > valB) return currentSort.asc ? 1 : -1;
-      return 0;
+  function updateMarkerVisibility() {
+    const filtered = new Set(getFilteredFeatures().map(f => f.id));
+    Object.entries(markerById).forEach(([id, m]) => {
+      const show = filtered.has(Number(id)) || filtered.has(id);
+      const icon = show
+        ? createLeafletIssueIcon(m.feature.issueType, m.feature.severity, m === activeMarker)
+        : L.divIcon({ className: "", html: "", iconSize: [0, 0] });
+      m.setIcon(icon);
     });
-
-    renderTable(sorted);
   }
 
-  function highlightRow(issueId) {
-    Object.values(rowsById).forEach(r => r.classList.remove("active-row"));
-    const row = rowsById[issueId];
-    if (row) row.classList.add("active-row");
-  }
+  // ======================== INITIAL LOAD ========================
+  loadIssues();
 
-  window.highlightRow = highlightRow;
+  // ======================== AUTO REFRESH ========================
+  // Re-use loadIssues() so site-based clustering is rebuilt correctly.
+  setInterval(() => {
+    // Clear existing marker refs — loadIssues will rebuild them
+    for (const key in markerById) delete markerById[key];
+    activeMarker = null;
+    loadIssues();
+  }, REFRESH_INTERVAL_MS);
 
-  table.querySelectorAll("th[data-field]").forEach(th => {
-    th.style.cursor = "pointer";
-    th.addEventListener("click", () => sortTable(th.dataset.field));
-  });
+} // end isIssuesPage
 
-  renderTable(currentIssues);
-}
-
-})
+}); // end DOMContentLoaded
