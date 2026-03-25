@@ -227,12 +227,15 @@ async function zoomToAllSites() {
   if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
 }
 
-// Preload all sites (boundary + trails combined)
-let sitesLoadedCount = 0;
-const totalSites = Object.values(sites).length;
+// Preload all sites asynchronously
+let currentSiteLayer = null;
 
-Object.values(sites).forEach(site => {
-  siteLoadPromises[site.id] = (async () => {
+// Preload all sites asynchronously
+const totalSites = Object.keys(sites).length;
+let sitesLoadedCount = 0;
+
+Object.entries(sites).forEach(([siteId, site]) => {
+  siteLoadPromises[siteId] = (async () => {
     try {
       const [boundaryData, trailsData] = await Promise.all([
         fetch(site.boundary).then(r => r.json()),
@@ -250,44 +253,37 @@ Object.values(sites).forEach(site => {
         pane: "trailsPane"
       });
 
-      siteLayersCache[site.id] = L.layerGroup([boundaryLayer, trailsLayer]);
+      siteLayersCache[siteId] = L.layerGroup([boundaryLayer, trailsLayer]);
 
-      // Track progress
       sitesLoadedCount++;
       console.log(`Preload progress: ${sitesLoadedCount} / ${totalSites} sites loaded`);
 
-      return siteLayersCache[site.id];
+      return siteLayersCache[siteId];
     } catch (err) {
-      console.error("Failed to preload site:", site.id || site.name || site, err);
+      console.error("Failed to preload site:", siteId, err);
     }
   })();
 });
 
-let currentSiteLayer = null;
-
 document.addEventListener("DOMContentLoaded", () => {
-  // --- Site dropdown setup + preload handling ---
   const siteDropdown = document.getElementById("siteSelect");
   if (!siteDropdown) {
     console.error("Site dropdown not found in DOM!");
     return;
   }
 
-  // Clear existing options except placeholder
+  // Clear placeholder
   siteDropdown.innerHTML = '<option value="" selected disabled></option>';
 
-  // Populate dropdown from sites
-  Object.values(sites).forEach(site => {
+  // Populate dropdown using the same keys as your sites object
+  Object.keys(sites).sort().forEach(siteId => {
     const option = document.createElement("option");
-    option.value = site.id;       // must match siteLayersCache key
-    option.textContent = site.name; // label for user
+    option.value = siteId;       // matches siteLayersCache keys
+    option.textContent = sites[siteId].name; // display name
     siteDropdown.appendChild(option);
   });
 
-  // Track current site layer
-  let currentSiteLayer = null;
-
-  // Add event listener for site selection
+  // Event listener for site selection
   siteDropdown.addEventListener("change", async (e) => {
     const siteId = e.target.value;
     console.log("Dropdown value:", siteId);
@@ -295,16 +291,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     clearSiteOverlays();
 
-    // Wait for the site to finish preloading if necessary
     if (!siteLayersCache[siteId]) {
       console.log(`Waiting for ${siteId} to preload...`);
       const layer = await siteLoadPromises[siteId];
-      if (!layer) return; // preload failed
+      if (!layer) return;
     }
 
-    if (currentSiteLayer) {
-      map.removeLayer(currentSiteLayer);
-    }
+    if (currentSiteLayer) map.removeLayer(currentSiteLayer);
 
     currentSiteLayer = siteLayersCache[siteId];
     currentSiteLayer.addTo(map);
@@ -362,12 +355,12 @@ if (isFormPage) {
   submitBtn.disabled = true;
 
   // ---- Populate site dropdown ----
-  Object.keys(sites).sort().forEach(name => {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
-    siteSelect.appendChild(opt);
-  });
+  //Object.keys(sites).sort().forEach(name => {
+  //  const opt = document.createElement("option");
+  //  opt.value = name;
+  //  opt.textContent = name;
+  //  siteSelect.appendChild(opt);
+  //});
 
   // ---- Map init ----
   map = initBaseMap("map", [41.8029231, -70.6108888], 8);
@@ -409,26 +402,26 @@ if (isFormPage) {
     //  updateMapRequiredState();
     //  updateSubmitState();
     // });
-  let currentSiteLayer = null;
+  // let currentSiteLayer = null;
 
-siteSelect.addEventListener("change", (e) => {
-  const siteId = e.target.value;
-  clearSiteOverlays();
-
-  if (currentSiteLayer) {
-    map.removeLayer(currentSiteLayer);
-  }
-
-  const layer = siteLayersCache[siteId];
-
-  if (layer) {
-    layer.addTo(map);
-    map.fitBounds(layer.getBounds());
-    currentSiteLayer = layer;
-  } else {
-    console.warn("Site not preloaded yet:", siteId);
-  }
-});
+//siteSelect.addEventListener("change", (e) => {
+//  const siteId = e.target.value;
+//  clearSiteOverlays();
+//
+//  if (currentSiteLayer) {
+//    map.removeLayer(currentSiteLayer);
+//  }
+//
+//  const layer = siteLayersCache[siteId];
+//
+//  if (layer) {
+//    layer.addTo(map);
+//    map.fitBounds(layer.getBounds());
+//    currentSiteLayer = layer;
+//  } else {
+//    console.warn("Site not preloaded yet:", siteId);
+//  }
+//});
 
   // ---- Required field listeners ----
   [siteSelect, issueType, severity].forEach(el => el.addEventListener("change", updateSubmitState));
