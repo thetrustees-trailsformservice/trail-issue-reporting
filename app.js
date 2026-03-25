@@ -41,6 +41,8 @@ let activeSiteFilter  = "";
 
 // ======================== GEO JSON CACHE ========================
 const geoJsonCache = {};
+const siteLayersCache = {};
+const siteLoadPromises = {};
 
 async function fetchGeoJson(url) {
   if (!url) return null;
@@ -133,17 +135,45 @@ function initBaseMap(mapId, center, zoom) {
   map.getPane("issuesPane").style.zIndex = 600;
   map.getPane("issuesPane").style.pointerEvents = "auto";
 
-  // Carto Voyager — clean, readable basemap
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
+  // Base layers
+  const voyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
     updateWhenIdle: true,
     keepBuffer: 2
-  }).addTo(map);
+  });
+
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    updateWhenIdle: true,
+    keepBuffer: 2
+  });
+
+  // Add default layer
+  voyager.addTo(map);
+
+  // Layer control
+  L.control.layers(
+    {
+      "Map": voyager,
+      "Satellite": satellite
+    },
+    null,
+    {
+      position: 'topright'
+    }
+  ).addTo(map);
 
   return map;
 }
 
 // ======================== SITE OVERLAYS ========================
+// Boundary styles
+const boundaryShadowStyle = { color: "#C4D600", weight: 8, opacity: 0.5, fillOpacity: 0 };
+const boundaryFillStyle = { color: "#4B6F44", weight: 2.5, fillOpacity: 0.08 };
+
+// Trail style 
+const trailStyle = { color: "#6b4f2a", weight: 2 };
+
 function clearSiteOverlays() {
   [boundaryLayer, boundaryShadowLayer, trailsLayer].forEach(layer => {
     if (layer && map.hasLayer(layer)) map.removeLayer(layer);
@@ -158,12 +188,12 @@ async function loadSiteBoundary(site, doZoom = true) {
 
   boundaryShadowLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
-    style: { color: "#C4D600", weight: 8, opacity: 0.5, fillOpacity: 0 }
+    style: boundaryShadowStyle
   }).addTo(map);
 
   boundaryLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
-    style: { color: "#4B6F44", weight: 2.5, fillOpacity: 0.08 }
+    style: boundaryFillStyle
   }).addTo(map);
 
   if (doZoom) {
@@ -196,6 +226,91 @@ async function zoomToAllSites() {
   const bounds = group.getBounds();
   if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
 }
+
+// Preload all sites (boundary + trails combined)
+let sitesLoadedCount = 0;
+const totalSites = Object.values(sites).length;
+
+Object.values(sites).forEach(site => {
+  siteLoadPromises[site.id] = (async () => {
+    try {
+      const [boundaryData, trailsData] = await Promise.all([
+        fetch(site.boundary).then(r => r.json()),
+        fetch(site.trails).then(r => r.json())
+      ]);
+
+      const boundaryLayer = L.geoJSON(boundaryData, {
+        style: boundaryFillStyle,
+        pane: "boundaryPane",
+        interactive: false
+      });
+
+      const trailsLayer = L.geoJSON(trailsData, {
+        style: trailStyle,
+        pane: "trailsPane"
+      });
+
+      siteLayersCache[site.id] = L.layerGroup([boundaryLayer, trailsLayer]);
+
+      // Track progress
+      sitesLoadedCount++;
+      console.log(`Preload progress: ${sitesLoadedCount} / ${totalSites} sites loaded`);
+
+      return siteLayersCache[site.id];
+    } catch (err) {
+      console.error("Failed to preload site:", site.id || site.name || site, err);
+    }
+  })();
+});
+
+let currentSiteLayer = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+  // --- Site dropdown setup + preload handling ---
+  const siteDropdown = document.getElementById("siteSelect");
+  if (!siteDropdown) {
+    console.error("Site dropdown not found in DOM!");
+    return;
+  }
+
+  // Clear existing options except placeholder
+  siteDropdown.innerHTML = '<option value="" selected disabled></option>';
+
+  // Populate dropdown from sites
+  Object.values(sites).forEach(site => {
+    const option = document.createElement("option");
+    option.value = site.id;       // must match siteLayersCache key
+    option.textContent = site.name; // label for user
+    siteDropdown.appendChild(option);
+  });
+
+  // Track current site layer
+  let currentSiteLayer = null;
+
+  // Add event listener for site selection
+  siteDropdown.addEventListener("change", async (e) => {
+    const siteId = e.target.value;
+    console.log("Dropdown value:", siteId);
+    console.log("Cached site keys:", Object.keys(siteLayersCache));
+
+    clearSiteOverlays();
+
+    // Wait for the site to finish preloading if necessary
+    if (!siteLayersCache[siteId]) {
+      console.log(`Waiting for ${siteId} to preload...`);
+      const layer = await siteLoadPromises[siteId];
+      if (!layer) return; // preload failed
+    }
+
+    if (currentSiteLayer) {
+      map.removeLayer(currentSiteLayer);
+    }
+
+    currentSiteLayer = siteLayersCache[siteId];
+    currentSiteLayer.addTo(map);
+    map.fitBounds(currentSiteLayer.getBounds());
+  });
+});
 
 // ======================== UTILITY ========================
 function getSeverityColor(severity) {
@@ -283,16 +398,37 @@ if (isFormPage) {
   });
 
   // ---- Site change ----
-  siteSelect.addEventListener("change", async () => {
-    const site = sites[siteSelect.value];
-    if (!site) return;
-    clearSiteOverlays();
-    await loadSiteBoundary(site, true);
-    await loadSiteTrails(site);
-    if (marker) { map.removeLayer(marker); marker = null; }
-    updateMapRequiredState();
-    updateSubmitState();
-  });
+  // replaced this whole block 
+    // siteSelect.addEventListener("change", async () => {
+    //  const site = sites[siteSelect.value];
+    //  if (!site) return;
+    //  clearSiteOverlays();
+    //  await loadSiteBoundary(site, true);
+    //  await loadSiteTrails(site);
+    //  if (marker) { map.removeLayer(marker); marker = null; }
+    //  updateMapRequiredState();
+    //  updateSubmitState();
+    // });
+  let currentSiteLayer = null;
+
+siteSelect.addEventListener("change", (e) => {
+  const siteId = e.target.value;
+  clearSiteOverlays();
+
+  if (currentSiteLayer) {
+    map.removeLayer(currentSiteLayer);
+  }
+
+  const layer = siteLayersCache[siteId];
+
+  if (layer) {
+    layer.addTo(map);
+    map.fitBounds(layer.getBounds());
+    currentSiteLayer = layer;
+  } else {
+    console.warn("Site not preloaded yet:", siteId);
+  }
+});
 
   // ---- Required field listeners ----
   [siteSelect, issueType, severity].forEach(el => el.addEventListener("change", updateSubmitState));
@@ -699,13 +835,18 @@ if (isIssuesPage) {
         const icon   = createLeafletIssueIcon(feature.issueType, feature.severity);
         const m      = L.marker(latlng, { icon, pane: "issuesPane" });
         m.feature    = feature;
+        m.originalLatLng = latlng;
 
         m.on("click", () => {
           setActiveMarker(m);
           flyToMarker(m);
           highlightCard(feature.id);
-          map.once("moveend", () => m.openPopup());
-        });
+
+          map.once("moveend", () => {
+            m.setLatLng(m.originalLatLng); // snap back before popup
+            m.openPopup();
+          });
+        }); 
 
         m.bindPopup(() => buildPopupContent(feature), {
           className: `custom-popup severity-${feature.severity?.toLowerCase()}`,
@@ -732,10 +873,20 @@ if (isIssuesPage) {
   }
 
   function flyToMarker(marker) {
-    const zoom  = 16;
-    const point = map.project(marker.getLatLng(), zoom);
-    point.y    -= 100;
-    map.flyTo(map.unproject(point, zoom), zoom, { animate: true, duration: 0.6 });
+    let targetZoom = 16;
+
+    if (marker.__parent && typeof marker.__parent.options.disableClusteringAtZoom === "number") {
+      targetZoom = Math.max(marker.__parent.options.disableClusteringAtZoom, map.getZoom() + 2);
+    }
+
+    const targetLatLng = marker.originalLatLng || marker.getLatLng();
+    const point = map.project(targetLatLng, targetZoom);
+    point.y -= 100; // keep popup visible
+
+    map.flyTo(map.unproject(point, targetZoom), targetZoom, {
+      animate: true,
+      duration: 0.6
+    });
   }
 
   // ======================== POPUP BUILDER ========================
@@ -743,7 +894,7 @@ if (isIssuesPage) {
     const icon      = issueIcons[f.issueType] || "❓";
     const sevLower  = (f.severity || "").toLowerCase();
     const spUrl     = SHAREPOINT_BASE + f.id;
-    const hasPhoto  = !!f.photoUrl;
+    const hasPhoto = f.photolink && f.photolink.startsWith("http");
 
     const container = document.createElement("div");
     container.innerHTML = `
@@ -755,7 +906,11 @@ if (isIssuesPage) {
         </div>
       </div>
 
-      ${hasPhoto ? `<img class="popup-photo" src="${f.photoUrl}" alt="Issue photo" loading="lazy" />` : ""}
+      ${hasPhoto ? `
+        <a href="${f.photolink}" target="_blank" rel="noopener noreferrer" class="popup-photo-link">
+          <img class="popup-photo" src="${f.photolink}" alt="Issue photo" loading="lazy" />
+        </a>
+      ` : ""}
 
       <div class="popup-body">
         <div class="popup-row">
@@ -970,4 +1125,4 @@ if (isIssuesPage) {
 
 } // end isIssuesPage
 
-}); // end DOMContentLoaded
+}); // end DOMContentLoaded}
