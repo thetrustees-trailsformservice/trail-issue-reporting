@@ -6,6 +6,7 @@
 // ======================== SHARED GLOBALS ========================
 let map;
 let voyager, googleHybrid;
+let currentBase           = "voyager";
 let boundaryLayer         = null;       
 let boundaryShadowLayer   = null;
 let trailsLayer           = null;
@@ -115,16 +116,26 @@ function setActiveMarker(newMarker) {
 // ======================== BASE MAP ========================
 const themes = {
   voyager: {
-    shadow: { color: "#A4B600", weight: 8, opacity: 0.4 }, // Slightly darker lime
-    fill:   { color: "#008B8B", weight: 3, fillOpacity: 0.05, dashArray: '8 8' }, // Deep Cyan
-    trail:  { color: "#D4AF37", weight: 2 } // Metallic Gold
+    shadow: { color: "#A4B600", weight: 8, opacity: 0.4 }, 
+    fill:   { color: "#008B8B", weight: 3, fillOpacity: 0.05, dashArray: '8 8' }, 
+    trail:  { color: "#D4AF37", weight: 2 } 
   },
   satellite: {
-    shadow: { color: "#C4D600", weight: 8, opacity: 0.6 }, // Bright Lime
-    fill:   { color: "#FF0000", weight: 3, fillOpacity: 0.1, dashArray: '8 8' }, // Electric Cyan
-    trail:  { color: "#FFD700", weight: 2 } // Bright Gold
+    shadow: { color: "#C4D600", weight: 8, opacity: 0.6 }, 
+    fill:   { color: "#FF0000", weight: 3, fillOpacity: 0.1, dashArray: '8 8' }, 
+    trail:  { color: "#FFD700", weight: 2 } 
   }
 };
+
+function applyCurrentThemeToSiteLayer(layer) {
+  if (!layer) return;
+  const theme = themes[currentBase];
+  layer.eachLayer(l => {
+    if (!l.setStyle) return;
+    if (l.options.pane === "boundaryPane") l.setStyle(theme.fill);
+    if (l.options.pane === "trailsPane")   l.setStyle(theme.trail);
+  });
+}
 
 function initBaseMap(mapId, center, zoom) {
   const container = L.DomUtil.get(mapId);
@@ -166,51 +177,23 @@ function initBaseMap(mapId, center, zoom) {
   // Add default layer
   voyager.addTo(map);
 
-  // EasyButton for layer control
-  L.easyButton('<div class="layer-toggle-bg"></div>', function(btn, map) {
-    const isVoyagerActive = map.hasLayer(voyager);
-    const theme = isVoyagerActive ? themes.satellite : themes.voyager;
-  
-    // Toggle Basemaps
-    if (isVoyagerActive) {
+  // EasyButton toggle
+    L.easyButton('<div class="layer-toggle-bg"></div>', function(btn, map) {
+      if (map.hasLayer(voyager)) {
         map.removeLayer(voyager);
         googleHybrid.addTo(map);
-    } else {
+        currentBase = "satellite";
+      } else {
         map.removeLayer(googleHybrid);
         voyager.addTo(map);
-    }
+        currentBase = "voyager";
+      }
 
-    if (window.boundaryShadowLayer) {
-      boundaryShadowLayer.setStyle(theme.shadow);
-    }
-    if (window.boundaryLayer) {
-        boundaryLayer.setStyle(theme.fill);
-    }
-    if (window.trailsLayer) {
-        trailsLayer.setStyle(theme.trail);
-    }
-
-      const updateStyles = (group, style) => {
-        if (!group) return;
-        // Check if it's a single GeoJSON layer or a LayerGroup
-        if (group.setStyle) {
-            group.setStyle(style);
-        }
-        if (group.eachLayer) {
-            group.eachLayer(layer => {
-                if (layer.setStyle) layer.setStyle(style);
-            });
-        }
-    };
-
-    updateStyles(boundaryShadowLayer, theme.shadow);
-    updateStyles(boundaryLayer, theme.fill);
-    updateStyles(trailsLayer, theme.trail);
-
-  }, { 
-    position: 'topright',
-    id: 'button-layer-toggle'
-  }).addTo(map);
+      // Apply the theme to each child layer
+      [boundaryShadowLayer, boundaryLayer, trailsLayer].forEach(l => {
+        if (l) applyCurrentThemeToSiteLayer(l);
+      });
+    }, { position: 'topright', id: 'button-layer-toggle' }).addTo(map);
 
   return map;
 }
@@ -228,16 +211,11 @@ async function loadSiteBoundary(site, doZoom = true) {
   const geojson = await fetchGeoJson(site.boundary);
   if (!geojson) return;
 
-  const currentTheme = map.hasLayer(voyager) ? themes.voyager : themes.satellite;
+  const theme = themes[currentBase];
 
   window.boundaryShadowLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
-    style: currentTheme.shadow
-  }).addTo(map);
-
-  window.boundaryLayer = L.geoJSON(geojson, {
-    pane: "boundaryPane",
-    style: currentTheme.fill
+    style: theme.shadow
   }).addTo(map);
 
   if (doZoom) {
@@ -247,14 +225,17 @@ async function loadSiteBoundary(site, doZoom = true) {
 }
 
 async function loadSiteTrails(site) {
-  if (!site?.trails) return;
+  if (!site?.trails) return null;
   const geojson = await fetchGeoJson(site.trails);
-  if (!geojson) return;
+  if (!geojson) return null;
 
-  window.trailsLayer = L.geoJSON(geojson, {
+  const theme = themes[currentBase]; // use current basemap theme
+
+  // Return the layer, do not add to map
+  return L.geoJSON(geojson, {
     pane: "trailsPane",
-    style: currentTheme.trail
-  }).addTo(map);
+    style: theme.trail
+  });
 }
 
 async function zoomToAllSites() {
@@ -274,10 +255,12 @@ async function zoomToAllSites() {
 // Preload all sites asynchronously
 let currentSiteLayer = null;
 
-// Preload all sites asynchronously
+// ======================== Preload all sites ========================
 const totalSites = Object.keys(sites).length;
 let sitesLoadedCount = 0;
 
+// Preload all sites asynchronously
+// Preload all sites asynchronously
 Object.entries(sites).forEach(([siteId, site]) => {
   siteLoadPromises[siteId] = (async () => {
     try {
@@ -286,24 +269,28 @@ Object.entries(sites).forEach(([siteId, site]) => {
         fetch(site.trails).then(r => r.json())
       ]);
 
-      boundaryShadowLayer = L.geoJSON(boundaryData, {
-        style: themes.voyager.shadow, // Start with voyager style
+      // Use current base for theme
+      const theme = themes[currentBase];
+
+      const boundaryShadow = L.geoJSON(boundaryData, {
+        style: theme.shadow,
         pane: "boundaryPane",
         interactive: false
       });
 
-      boundaryLayer = L.geoJSON(boundaryData, {
-        style: themes.voyager.fill, 
+      const boundary = L.geoJSON(boundaryData, {
+        style: theme.fill,
         pane: "boundaryPane",
         interactive: false
       });
 
-      trailsLayer = L.geoJSON(trailsData, {
-        style: themes.voyager.trail,
+      const trails = L.geoJSON(trailsData, {
+        style: theme.trail,
         pane: "trailsPane"
       });
 
-      siteLayersCache[siteId] = L.layerGroup([boundaryShadowLayer, boundaryLayer, trailsLayer]);
+      // Cache as a single LayerGroup
+      siteLayersCache[siteId] = L.layerGroup([boundaryShadow, boundary, trails]);
 
       sitesLoadedCount++;
       console.log(`Preload progress: ${sitesLoadedCount} / ${totalSites} sites loaded`);
@@ -314,7 +301,6 @@ Object.entries(sites).forEach(([siteId, site]) => {
     }
   })();
 });
-
 
 // ======================== UTILITY ========================
 function getSeverityColor(severity) {
@@ -373,41 +359,6 @@ if (isFormPage) {
     siteSelect.appendChild(opt);
   });
 
-  // Preload all sites
-  Object.entries(sites).forEach(([siteId, site]) => {
-    siteLoadPromises[siteId] = (async () => {
-      try {
-        const [boundaryData, trailsData] = await Promise.all([
-          fetch(site.boundary).then(r => r.json()),
-          fetch(site.trails).then(r => r.json())
-        ]);
-
-        boundaryShadowLayer = L.geoJSON(boundaryData, {
-          style: themes.voyager.shadow, // Start with voyager style
-          pane: "boundaryPane",
-          interactive: false
-        });
-
-        boundaryLayer = L.geoJSON(boundaryData, {
-          style: themes.voyager.fill, 
-          pane: "boundaryPane",
-          interactive: false
-        });
-
-        trailsLayer = L.geoJSON(trailsData, {
-          style: themes.voyager.trail,
-          pane: "trailsPane"
-        });
-
-        siteLayersCache[siteId] = L.layerGroup([boundaryLayer, trailsLayer]);
-
-        return siteLayersCache[siteId];
-      } catch (err) {
-        console.error("Failed to preload site:", siteId, err);
-      }
-    })();
-  });
-
   // ---- Map init ----
   map = initBaseMap("map", [41.8029231, -70.6108888], 8);
 
@@ -436,42 +387,36 @@ if (isFormPage) {
     updateSubmitState();
   });
 
-  // ---- Site change ----
-  // replaced this whole block 
-    // siteSelect.addEventListener("change", async () => {
-    //  const site = sites[siteSelect.value];
-    //  if (!site) return;
-    //  clearSiteOverlays();
-    //  await loadSiteBoundary(site, true);
-    //  await loadSiteTrails(site);
-    //  if (marker) { map.removeLayer(marker); marker = null; }
-    //  updateMapRequiredState();
-    //  updateSubmitState();
-    // });
   let currentSiteLayer = null;
 
   siteSelect.addEventListener("change", async (e) => {
     const siteId = e.target.value;
 
-    clearSiteOverlays();
+    if (currentSiteLayer) map.removeLayer(currentSiteLayer);
 
-    if (!siteLayersCache[siteId]) {
-      console.log("Waiting for preload:", siteId);
-      const layer = await siteLoadPromises[siteId];
+    let layer = siteLayersCache[siteId];
+    if (!layer) {
+      console.log(`Waiting for ${siteId} to preload...`);
+      layer = await siteLoadPromises[siteId];
       if (!layer) return;
     }
 
-    if (currentSiteLayer) {
-      map.removeLayer(currentSiteLayer);
-    }
+    layer.addTo(map);
+    // When changing site
+    currentSiteLayer = layer;
+    boundaryShadowLayer = layer.getLayers().find(l => l.options.pane === "boundaryPane" && l !== undefined);
+    boundaryLayer       = layer.getLayers().find(l => l.options.pane === "boundaryPane" && l !== boundaryShadowLayer);
+    trailsLayer         = layer.getLayers().find(l => l.options.pane === "trailsPane");
 
-    currentSiteLayer = siteLayersCache[siteId];
+    // Apply current base theme
+    applyCurrentThemeToSiteLayer(boundaryShadowLayer);
+    applyCurrentThemeToSiteLayer(boundaryLayer);
+    applyCurrentThemeToSiteLayer(trailsLayer);
 
-    currentSiteLayer.addTo(map);
-    const bounds = L.featureGroup(currentSiteLayer.getLayers()).getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [30, 30] });
-    }
+    // Fit map to site bounds
+    const bounds = L.featureGroup(layer.getLayers()).getBounds();
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+
     if (marker) {
       map.removeLayer(marker);
       marker = null;
