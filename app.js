@@ -3,6 +3,22 @@
    Supports: index.html (form page) + issues.html (map page)
    ============================================================= */
 
+// ======================== SHARED GLOBALS ========================
+let map;
+let voyager, googleHybrid;
+let boundaryLayer         = null;       
+let boundaryShadowLayer   = null;
+let trailsLayer           = null;
+let marker                = null;
+let issuesLayer           = null;
+let clusterGroup          = null;
+let activeMarker          = null;
+let isSubmitting          = false;
+let allFeatures           = [];
+let activeSeverityFilter  = "all";
+let activeSearchTerm      = "";
+let activeSiteFilter      = "";
+
 document.addEventListener("DOMContentLoaded", () => {
 
 // ======================== CONFIG ========================
@@ -23,21 +39,6 @@ const SHAREPOINT_BASE =
 
 // Auto-refresh interval in ms (5 minutes)
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-
-// ======================== SHARED GLOBALS ========================
-let map;
-let marker            = null;
-let boundaryLayer     = null;
-let boundaryShadowLayer = null;
-let trailsLayer       = null;
-let issuesLayer       = null;
-let clusterGroup      = null;
-let activeMarker      = null;
-let isSubmitting      = false;
-let allFeatures       = [];
-let activeSeverityFilter = "all";
-let activeSearchTerm  = "";
-let activeSiteFilter  = "";
 
 // ======================== GEO JSON CACHE ========================
 const geoJsonCache = {};
@@ -112,6 +113,19 @@ function setActiveMarker(newMarker) {
 }
 
 // ======================== BASE MAP ========================
+const themes = {
+  voyager: {
+    shadow: { color: "#A4B600", weight: 8, opacity: 0.4 }, // Slightly darker lime
+    fill:   { color: "#008B8B", weight: 3, fillOpacity: 0.05, dashArray: '8 8' }, // Deep Cyan
+    trail:  { color: "#D4AF37", weight: 2 } // Metallic Gold
+  },
+  satellite: {
+    shadow: { color: "#C4D600", weight: 8, opacity: 0.6 }, // Bright Lime
+    fill:   { color: "#FF0000", weight: 3, fillOpacity: 0.1, dashArray: '8 8' }, // Electric Cyan
+    trail:  { color: "#FFD700", weight: 2 } // Bright Gold
+  }
+};
+
 function initBaseMap(mapId, center, zoom) {
   const container = L.DomUtil.get(mapId);
   if (container && container._leaflet_id) return map;
@@ -136,14 +150,15 @@ function initBaseMap(mapId, center, zoom) {
   map.getPane("issuesPane").style.pointerEvents = "auto";
 
   // Base layers
-  const voyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
+  voyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
     updateWhenIdle: true,
     keepBuffer: 2
   });
 
-  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',{
     maxZoom: 19,
+    subdomains:['mt0','mt1','mt2','mt3'],
     updateWhenIdle: true,
     keepBuffer: 2
   });
@@ -151,29 +166,56 @@ function initBaseMap(mapId, center, zoom) {
   // Add default layer
   voyager.addTo(map);
 
-  // Layer control
-  L.control.layers(
-    {
-      "Map": voyager,
-      "Satellite": satellite
-    },
-    null,
-    {
-      position: 'topright'
+  // EasyButton for layer control
+  L.easyButton('<div class="layer-toggle-bg"></div>', function(btn, map) {
+    const isVoyagerActive = map.hasLayer(voyager);
+    const theme = isVoyagerActive ? themes.satellite : themes.voyager;
+  
+    // Toggle Basemaps
+    if (isVoyagerActive) {
+        map.removeLayer(voyager);
+        googleHybrid.addTo(map);
+    } else {
+        map.removeLayer(googleHybrid);
+        voyager.addTo(map);
     }
-  ).addTo(map);
+
+    if (window.boundaryShadowLayer) {
+      boundaryShadowLayer.setStyle(theme.shadow);
+    }
+    if (window.boundaryLayer) {
+        boundaryLayer.setStyle(theme.fill);
+    }
+    if (window.trailsLayer) {
+        trailsLayer.setStyle(theme.trail);
+    }
+
+      const updateStyles = (group, style) => {
+        if (!group) return;
+        // Check if it's a single GeoJSON layer or a LayerGroup
+        if (group.setStyle) {
+            group.setStyle(style);
+        }
+        if (group.eachLayer) {
+            group.eachLayer(layer => {
+                if (layer.setStyle) layer.setStyle(style);
+            });
+        }
+    };
+
+    updateStyles(boundaryShadowLayer, theme.shadow);
+    updateStyles(boundaryLayer, theme.fill);
+    updateStyles(trailsLayer, theme.trail);
+
+  }, { 
+    position: 'topright',
+    id: 'button-layer-toggle'
+  }).addTo(map);
 
   return map;
 }
 
 // ======================== SITE OVERLAYS ========================
-// Boundary styles
-const boundaryShadowStyle = { color: "#C4D600", weight: 8, opacity: 0.5, fillOpacity: 0 };
-const boundaryFillStyle = { color: "#4B6F44", weight: 2.5, fillOpacity: 0.08 };
-
-// Trail style 
-const trailStyle = { color: "#6b4f2a", weight: 2 };
-
 function clearSiteOverlays() {
   [boundaryLayer, boundaryShadowLayer, trailsLayer].forEach(layer => {
     if (layer && map.hasLayer(layer)) map.removeLayer(layer);
@@ -186,14 +228,16 @@ async function loadSiteBoundary(site, doZoom = true) {
   const geojson = await fetchGeoJson(site.boundary);
   if (!geojson) return;
 
-  boundaryShadowLayer = L.geoJSON(geojson, {
+  const currentTheme = map.hasLayer(voyager) ? themes.voyager : themes.satellite;
+
+  window.boundaryShadowLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
-    style: boundaryShadowStyle
+    style: currentTheme.shadow
   }).addTo(map);
 
-  boundaryLayer = L.geoJSON(geojson, {
+  window.boundaryLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
-    style: boundaryFillStyle
+    style: currentTheme.fill
   }).addTo(map);
 
   if (doZoom) {
@@ -207,9 +251,9 @@ async function loadSiteTrails(site) {
   const geojson = await fetchGeoJson(site.trails);
   if (!geojson) return;
 
-  trailsLayer = L.geoJSON(geojson, {
+  window.trailsLayer = L.geoJSON(geojson, {
     pane: "trailsPane",
-    style: { color: "#8B5A2B", weight: 3, opacity: 0.85 }
+    style: currentTheme.trail
   }).addTo(map);
 }
 
@@ -242,18 +286,24 @@ Object.entries(sites).forEach(([siteId, site]) => {
         fetch(site.trails).then(r => r.json())
       ]);
 
-      const boundaryLayer = L.geoJSON(boundaryData, {
-        style: boundaryFillStyle,
+      boundaryShadowLayer = L.geoJSON(boundaryData, {
+        style: themes.voyager.shadow, // Start with voyager style
         pane: "boundaryPane",
         interactive: false
       });
 
-      const trailsLayer = L.geoJSON(trailsData, {
-        style: trailStyle,
+      boundaryLayer = L.geoJSON(boundaryData, {
+        style: themes.voyager.fill, 
+        pane: "boundaryPane",
+        interactive: false
+      });
+
+      trailsLayer = L.geoJSON(trailsData, {
+        style: themes.voyager.trail,
         pane: "trailsPane"
       });
 
-      siteLayersCache[siteId] = L.layerGroup([boundaryLayer, trailsLayer]);
+      siteLayersCache[siteId] = L.layerGroup([boundaryShadowLayer, boundaryLayer, trailsLayer]);
 
       sitesLoadedCount++;
       console.log(`Preload progress: ${sitesLoadedCount} / ${totalSites} sites loaded`);
@@ -265,45 +315,6 @@ Object.entries(sites).forEach(([siteId, site]) => {
   })();
 });
 
-document.addEventListener("DOMContentLoaded", () => {
-  const siteDropdown = document.getElementById("siteSelect");
-  if (!siteDropdown) {
-    console.error("Site dropdown not found in DOM!");
-    return;
-  }
-
-  // Clear placeholder
-  siteDropdown.innerHTML = '<option value="" selected disabled></option>';
-
-  // Populate dropdown using the same keys as your sites object
-  Object.keys(sites).sort().forEach(siteId => {
-    const option = document.createElement("option");
-    option.value = siteId;       // matches siteLayersCache keys
-    option.textContent = sites[siteId].name; // display name
-    siteDropdown.appendChild(option);
-  });
-
-  // Event listener for site selection
-  siteDropdown.addEventListener("change", async (e) => {
-    const siteId = e.target.value;
-    console.log("Dropdown value:", siteId);
-    console.log("Cached site keys:", Object.keys(siteLayersCache));
-
-    clearSiteOverlays();
-
-    if (!siteLayersCache[siteId]) {
-      console.log(`Waiting for ${siteId} to preload...`);
-      const layer = await siteLoadPromises[siteId];
-      if (!layer) return;
-    }
-
-    if (currentSiteLayer) map.removeLayer(currentSiteLayer);
-
-    currentSiteLayer = siteLayersCache[siteId];
-    currentSiteLayer.addTo(map);
-    map.fitBounds(currentSiteLayer.getBounds());
-  });
-});
 
 // ======================== UTILITY ========================
 function getSeverityColor(severity) {
@@ -355,12 +366,47 @@ if (isFormPage) {
   submitBtn.disabled = true;
 
   // ---- Populate site dropdown ----
-  //Object.keys(sites).sort().forEach(name => {
-  //  const opt = document.createElement("option");
-  //  opt.value = name;
-  //  opt.textContent = name;
-  //  siteSelect.appendChild(opt);
-  //});
+  Object.keys(sites).sort().forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    siteSelect.appendChild(opt);
+  });
+
+  // Preload all sites
+  Object.entries(sites).forEach(([siteId, site]) => {
+    siteLoadPromises[siteId] = (async () => {
+      try {
+        const [boundaryData, trailsData] = await Promise.all([
+          fetch(site.boundary).then(r => r.json()),
+          fetch(site.trails).then(r => r.json())
+        ]);
+
+        boundaryShadowLayer = L.geoJSON(boundaryData, {
+          style: themes.voyager.shadow, // Start with voyager style
+          pane: "boundaryPane",
+          interactive: false
+        });
+
+        boundaryLayer = L.geoJSON(boundaryData, {
+          style: themes.voyager.fill, 
+          pane: "boundaryPane",
+          interactive: false
+        });
+
+        trailsLayer = L.geoJSON(trailsData, {
+          style: themes.voyager.trail,
+          pane: "trailsPane"
+        });
+
+        siteLayersCache[siteId] = L.layerGroup([boundaryLayer, trailsLayer]);
+
+        return siteLayersCache[siteId];
+      } catch (err) {
+        console.error("Failed to preload site:", siteId, err);
+      }
+    })();
+  });
 
   // ---- Map init ----
   map = initBaseMap("map", [41.8029231, -70.6108888], 8);
@@ -402,26 +448,38 @@ if (isFormPage) {
     //  updateMapRequiredState();
     //  updateSubmitState();
     // });
-  // let currentSiteLayer = null;
+  let currentSiteLayer = null;
 
-//siteSelect.addEventListener("change", (e) => {
-//  const siteId = e.target.value;
-//  clearSiteOverlays();
-//
-//  if (currentSiteLayer) {
-//    map.removeLayer(currentSiteLayer);
-//  }
-//
-//  const layer = siteLayersCache[siteId];
-//
-//  if (layer) {
-//    layer.addTo(map);
-//    map.fitBounds(layer.getBounds());
-//    currentSiteLayer = layer;
-//  } else {
-//    console.warn("Site not preloaded yet:", siteId);
-//  }
-//});
+  siteSelect.addEventListener("change", async (e) => {
+    const siteId = e.target.value;
+
+    clearSiteOverlays();
+
+    if (!siteLayersCache[siteId]) {
+      console.log("Waiting for preload:", siteId);
+      const layer = await siteLoadPromises[siteId];
+      if (!layer) return;
+    }
+
+    if (currentSiteLayer) {
+      map.removeLayer(currentSiteLayer);
+    }
+
+    currentSiteLayer = siteLayersCache[siteId];
+
+    currentSiteLayer.addTo(map);
+    const bounds = L.featureGroup(currentSiteLayer.getLayers()).getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
+    if (marker) {
+      map.removeLayer(marker);
+      marker = null;
+    }
+
+    updateMapRequiredState();
+    updateSubmitState();
+  });
 
   // ---- Required field listeners ----
   [siteSelect, issueType, severity].forEach(el => el.addEventListener("change", updateSubmitState));

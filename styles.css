@@ -1181,6 +1181,30 @@ button#submitBtn:disabled {
   color: var(--text-primary) !important;
 }
 
+/* Leaflet layers control toggle styles */
+.leaflet-control-layers-toggle {
+  background-color: red !important;
+}
+
+#button-layer-toggle {
+  padding: 0;
+  background-clip: padding-box;
+}
+
+#button-layer-toggle .layer-toggle-bg {
+  width: 30px;
+  height: 30px;
+  background-image: url('https://unpkg.com/leaflet@1.9.4/dist/images/layers.png');
+  background-size: 20px 20px; /* Adjust based on your image size */
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+#button-layer-toggle:hover {
+  background-color: #f4f4f4;
+}
+
+
 /* ---------- CUSTOM POPUP ---------- */
 .leaflet-popup.custom-popup .leaflet-popup-content-wrapper {
   background: #fff;
