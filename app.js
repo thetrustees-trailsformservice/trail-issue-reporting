@@ -117,12 +117,12 @@ function setActiveMarker(newMarker) {
 const themes = {
   voyager: {
     shadow: { color: "#A4B600", weight: 8, opacity: 0.4 }, 
-    fill:   { color: "#008B8B", weight: 3, fillOpacity: 0.05, dashArray: '8 8' }, 
-    trail:  { color: "#D4AF37", weight: 2 } 
+    fill:   { color: "#008B8B", weight: 3, fillOpacity: 0.02, dashArray: '8 8' }, 
+    trail:  { color: "#853965", weight: 2 } 
   },
   satellite: {
     shadow: { color: "#C4D600", weight: 8, opacity: 0.6 }, 
-    fill:   { color: "#FF0000", weight: 3, fillOpacity: 0.1, dashArray: '8 8' }, 
+    fill:   { color: "#9adef3", weight: 3, fillOpacity: 0.02, dashArray: '8 8' }, 
     trail:  { color: "#FFD700", weight: 2 } 
   }
 };
@@ -161,13 +161,14 @@ function initBaseMap(mapId, center, zoom) {
   map.getPane("issuesPane").style.pointerEvents = "auto";
 
   // Base layers
-  voyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png', {
+  voyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
+    subdomains: 'abcd',
     updateWhenIdle: true,
     keepBuffer: 2
   });
 
-  googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',{
+  googleHybrid = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',{
     maxZoom: 19,
     subdomains:['mt0','mt1','mt2','mt3'],
     updateWhenIdle: true,
