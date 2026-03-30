@@ -13,12 +13,14 @@ let trailsLayer           = null;
 let marker                = null;
 let issuesLayer           = null;
 let clusterGroup          = null;
+let markerById            = {};
 let activeMarker          = null;
 let isSubmitting          = false;
 let allFeatures           = [];
 let activeSeverityFilter  = "all";
 let activeSearchTerm      = "";
 let activeSiteFilter      = "";
+let activeSortOrder       = "newest"; // "newest" or "oldest"
 
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -191,8 +193,20 @@ function initBaseMap(mapId, center, zoom) {
       }
 
       // Apply the theme to each child layer
-      [boundaryShadowLayer, boundaryLayer, trailsLayer].forEach(l => {
-        if (l) applyCurrentThemeToSiteLayer(l);
+      map.eachLayer(layer => {
+        // Only target GeoJSON layers (site boundaries + trails)
+        if (layer instanceof L.GeoJSON) {
+          applyCurrentThemeToSiteLayer(layer);
+        }
+
+        // Also handle LayerGroups (your preloaded sites)
+        if (layer instanceof L.LayerGroup) {
+          layer.eachLayer(sub => {
+            if (sub instanceof L.GeoJSON) {
+              applyCurrentThemeToSiteLayer(sub);
+            }
+          });
+        }
       });
     }, { position: 'topright', id: 'button-layer-toggle' }).addTo(map);
 
@@ -209,19 +223,28 @@ function clearSiteOverlays() {
 
 async function loadSiteBoundary(site, doZoom = true) {
   if (!site?.boundary) return;
+
   const geojson = await fetchGeoJson(site.boundary);
   if (!geojson) return;
 
   const theme = themes[currentBase];
 
-  window.boundaryShadowLayer = L.geoJSON(geojson, {
+  // Create BOTH layers and store them globally
+  boundaryShadowLayer = L.geoJSON(geojson, {
     pane: "boundaryPane",
     style: theme.shadow
   }).addTo(map);
 
-  if (doZoom) {
+  boundaryLayer = L.geoJSON(geojson, {
+    pane: "boundaryPane",
+    style: theme.fill
+  }).addTo(map);
+
+  if (doZoom && boundaryLayer) {
     const bounds = boundaryLayer.getBounds();
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
   }
 }
 
@@ -645,10 +668,20 @@ if (isIssuesPage) {
   map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
 
   // ---- Load all site boundaries + trails on the issues map ----
-  Object.values(sites).forEach(site => {
-    if (site.boundary) loadSiteBoundary(site, false);
-    if (site.trails)   loadSiteTrails(site);
-  });
+  (async () => {
+    for (const site of Object.values(sites)) {
+      if (site.boundary) {
+        await loadSiteBoundary(site, false);
+      }
+
+      if (site.trails) {
+        const trails = await loadSiteTrails(site);
+        if (trails) {
+          trails.addTo(map);
+        }
+      }
+    }
+  })();
 
   // ---- Populate site filter ----
   const siteFilter = document.getElementById("siteFilter");
@@ -671,7 +704,11 @@ if (isIssuesPage) {
       const site = sites[activeSiteFilter];
       if (site) {
         await loadSiteBoundary(site, true);
-        await loadSiteTrails(site);
+        const trails = await loadSiteTrails(site);
+        if (trails) {
+          trailsLayer = trails;
+          trails.addTo(map);
+        }
       }
     }
 
@@ -681,17 +718,35 @@ if (isIssuesPage) {
 
   // ---- Severity filter buttons ----
   document.querySelectorAll(".filter-btn").forEach(btn => {
+    // Skip the sort button
+    if (btn.id === "sortDateBtn") return;
+
     btn.addEventListener("click", () => {
       document.querySelectorAll(".filter-btn").forEach(b => {
+        if (b.id === "sortDateBtn") return; // leave sort button alone
         b.classList.remove("active");
         b.setAttribute("aria-pressed", "false");
       });
+
       btn.classList.add("active");
       btn.setAttribute("aria-pressed", "true");
       activeSeverityFilter = btn.dataset.severity;
       renderCards();
       updateMarkerVisibility();
     });
+  });
+
+  const sortBtn = document.getElementById("sortDateBtn");
+
+  sortBtn.addEventListener("click", e => {
+    e.preventDefault();
+
+    activeSortOrder = activeSortOrder === "newest" ? "oldest" : "newest";
+    sortBtn.textContent = activeSortOrder === "newest"
+      ? "🕒 Newest First"
+      : "🕒 Oldest First";
+
+    renderCards();
   });
 
   // ---- Search ----
@@ -764,102 +819,85 @@ if (isIssuesPage) {
     // site pop out of the cluster — set to match roughly "zoomed in to site" level.
     const useCluster = typeof L.markerClusterGroup === "function";
 
-    // Bucket features by site
+    // --- Bucket features by site ---
     const bySite = {};
-    allFeatures.forEach(feature => {
-      const siteName = feature.site || "__unknown__";
+    allFeatures.forEach(f => {
+      const siteName = f.site || "__unknown__";
       if (!bySite[siteName]) bySite[siteName] = [];
-      bySite[siteName].push(feature);
+      bySite[siteName].push(f);
     });
 
+    // --- Prepare cluster groups per site ---
+    const siteClusterGroups = {}; // siteName -> clusterGroup
     Object.entries(bySite).forEach(([siteName, features]) => {
-      let group;
+      if (!useCluster) return;
 
-      if (useCluster) {
-        // Each site gets its own cluster group.
-        // disableClusteringAtZoom: when zoomed in past this level, all markers
-        // in the site show individually. 14 corresponds to "zoomed to site" level.
-        group = L.markerClusterGroup({
-          chunkedLoading: true,
-          showCoverageOnHover: false,
-          disableClusteringAtZoom: 14,
-          // Large enough radius to keep a full site collapsed at regional zoom,
-          // but markers will still split once disableClusteringAtZoom kicks in.
-          maxClusterRadius: zoom => zoom < 12 ? 120 : 60,
-          iconCreateFunction: cluster => {
-            const children  = cluster.getAllChildMarkers();
-            const hasHigh   = children.some(m => m.feature?.severity === "High");
-            const hasMedium = children.some(m => m.feature?.severity === "Medium");
-            const bgColor   = hasHigh ? "#c0392b" : hasMedium ? "#d97706" : "#16a34a";
-            const count     = cluster.getChildCount();
-            const label     = siteName === "__unknown__" ? "?" : siteName.split(" ")[0];
-            return L.divIcon({
-              className: "",
-              html: `
-                <div style="
-                  min-width:42px;
-                  height:42px;
-                  background:${bgColor};
-                  color:white;
-                  border-radius:8px;
-                  display:flex;
-                  flex-direction:column;
-                  align-items:center;
-                  justify-content:center;
-                  padding:0 8px;
-                  border:2px solid white;
-                  box-shadow:0 2px 8px rgba(0,0,0,0.35);
-                  font-family:var(--font-sans,sans-serif);
-                  gap:1px;
-                ">
-                  <span style="font-size:14px;font-weight:700;line-height:1;">${count}</span>
-                  <span style="font-size:8px;font-weight:600;opacity:.85;line-height:1;white-space:nowrap;max-width:52px;overflow:hidden;text-overflow:ellipsis;">${label}</span>
-                </div>`,
-              iconSize:   [42, 42],
-              iconAnchor: [21, 21]
-            });
-          }
-        });
-        map._siteClusterGroups.push(group);
-        map.addLayer(group);
-      }
-
-      features.forEach(feature => {
-        const coords = feature.geometry?.coordinates;
-        if (!coords) return;
-
-        const latlng = L.latLng(coords[1], coords[0]);
-        const icon   = createLeafletIssueIcon(feature.issueType, feature.severity);
-        const m      = L.marker(latlng, { icon, pane: "issuesPane" });
-        m.feature    = feature;
-        m.originalLatLng = latlng;
-
-        m.on("click", () => {
-          setActiveMarker(m);
-          flyToMarker(m);
-          highlightCard(feature.id);
-
-          map.once("moveend", () => {
-            m.setLatLng(m.originalLatLng); // snap back before popup
-            m.openPopup();
+      const group = L.markerClusterGroup({
+        chunkedLoading: true,
+        showCoverageOnHover: false,
+        disableClusteringAtZoom: 14,
+        maxClusterRadius: zoom => zoom < 12 ? 120 : 60,
+        iconCreateFunction: cluster => {
+          const children  = cluster.getAllChildMarkers();
+          const hasHigh   = children.some(m => m.feature?.severity === "High");
+          const hasMedium = children.some(m => m.feature?.severity === "Medium");
+          const bgColor   = hasHigh ? "#c0392b" : hasMedium ? "#d97706" : "#16a34a";
+          const count     = cluster.getChildCount();
+          const label     = children[0]?.feature?.site?.split(" ")[0] || "?";
+          return L.divIcon({
+            className: "",
+            html: `<div style="min-width:42px;height:42px;background:${bgColor};
+                          color:white;border-radius:8px;display:flex;
+                          flex-direction:column;align-items:center;
+                          justify-content:center;padding:0 8px;
+                          border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);
+                          font-family:var(--font-sans,sans-serif);gap:1px">
+                    <span style="font-size:14px;font-weight:700;line-height:1;">${count}</span>
+                    <span style="font-size:8px;font-weight:600;opacity:.85;
+                                  line-height:1;white-space:nowrap;max-width:52px;
+                                  overflow:hidden;text-overflow:ellipsis;">${label}</span>
+                  </div>`,
+            iconSize: [42,42],
+            iconAnchor: [21,21]
           });
-        }); 
-
-        m.bindPopup(() => buildPopupContent(feature), {
-          className: `custom-popup severity-${feature.severity?.toLowerCase()}`,
-          maxWidth: 300,
-          autoPan: true,
-          autoPanPaddingTopLeft: [10, 10]
-        });
-
-        markerById[feature.id] = m;
-
-        if (useCluster && group) {
-          group.addLayer(m);
-        } else {
-          m.addTo(map);
         }
       });
+
+      siteClusterGroups[siteName] = group;
+      map._siteClusterGroups.push(group);
+      map.addLayer(group);
+    });
+
+    // --- Create markers and assign to site clusters ---
+    allFeatures.forEach(feature => {
+      const coords = feature.geometry?.coordinates;
+      if (!coords) return;
+
+      const latlng = L.latLng(coords[1], coords[0]);
+      const icon   = createLeafletIssueIcon(feature.issueType, feature.severity);
+      const m      = L.marker(latlng, { icon, pane: "issuesPane" });
+      m.feature    = feature;
+      m.originalLatLng = latlng;
+
+      m.on("click", () => {
+        setActiveMarker(m);
+        flyToMarker(m);
+        highlightCard(feature.id);
+        map.once("moveend", () => {
+          m.setLatLng(m.originalLatLng);
+          m.openPopup();
+        });
+      });
+
+      m.bindPopup(() => buildPopupContent(feature), {
+        className: `custom-popup severity-${feature.severity?.toLowerCase()}`,
+        maxWidth: 300,
+        autoPan: true,
+        autoPanPaddingTopLeft: [10, 10]
+      });
+
+      markerById[feature.id] = m;
+      m._siteClusterGroup = siteClusterGroups[feature.site] || null;
     });
 
     // Update stats
@@ -1004,28 +1042,36 @@ if (isIssuesPage) {
   function getFilteredFeatures() {
     return allFeatures.filter(f => {
       const sevOk  = activeSeverityFilter === "all" ||
-                     f.severity?.toLowerCase() === activeSeverityFilter;
+        f.severity?.toLowerCase() === activeSeverityFilter;
       const siteOk = !activeSiteFilter || f.site === activeSiteFilter;
-      const q      = activeSearchTerm;
+      const q = (activeSearchTerm || "").trim().toLowerCase();
       const textOk = !q || [f.issueType, f.site, f.description, f.severity]
-                      .some(v => v?.toLowerCase().includes(q));
+      .filter(Boolean)
+      .some(v => v.toLowerCase().includes(q));
       return sevOk && siteOk && textOk;
     });
   }
 
   function renderCards() {
-    const list     = document.getElementById("issuesList");
-    const features = getFilteredFeatures();
+    const list = document.getElementById("issuesList");
+    const features = getFilteredFeatures(); // filtered by site/severity/search
 
-    // Sort: High first, then by date (newest first)
-    const severityOrder = { High: 0, Medium: 1, Low: 2 };
+    // --- Remove old cards and "no results" ---
+    list.querySelectorAll(".issue-card, .no-results").forEach(c => c.remove());
+
+    // --- Sort by date ---
     features.sort((a, b) => {
-      const sd = (severityOrder[a.severity] ?? 3) - (severityOrder[b.severity] ?? 3);
-      if (sd !== 0) return sd;
-      return new Date(b.submittedAt) - new Date(a.submittedAt);
+      if (!activeSortOrder || activeSortOrder === "newest") {
+        return new Date(b.submittedAt) - new Date(a.submittedAt);
+      } else {
+        return new Date(a.submittedAt) - new Date(b.submittedAt);
+      }
     });
 
-    // Clear existing cards (preserve loading msg if present)
+    // --- Update stats ---
+    updateStats(features);
+
+    // --- Clear existing cards ---
     list.querySelectorAll(".issue-card").forEach(c => c.remove());
 
     if (features.length === 0) {
@@ -1036,14 +1082,11 @@ if (isIssuesPage) {
             <div>No issues match your current filters.</div>
           </div>`;
       }
+      if (clusterGroup) clusterGroup.clearLayers();
       return;
     }
 
-    // Remove no-results if present
-    list.querySelector(".no-results")?.remove();
-
-    const fragment = document.createDocumentFragment();
-
+    // --- Build issue cards (original styling) ---
     features.forEach(f => {
       const sevLower = (f.severity || "").toLowerCase();
       const icon     = issueIcons[f.issueType] || "❓";
@@ -1070,22 +1113,65 @@ if (isIssuesPage) {
         </div>
       `;
 
-      const activate = () => {
-        const m = markerById[f.id];
-        if (!m) return;
-        setActiveMarker(m);
-        flyToMarker(m);
-        highlightCard(f.id);
-        map.once("moveend", () => m.openPopup());
-      };
+      card.addEventListener("click", () => {
+        const marker = markerById[f.id];
+        if (marker) {
+          setActiveMarker(marker);
+          flyToMarker(marker);
+          marker.openPopup();
+          highlightCard(f.id);
+        }
+      });
 
-      card.addEventListener("click",   activate);
-      card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") activate(); });
-
-      fragment.appendChild(card);
+      list.appendChild(card);
     });
 
-    list.appendChild(fragment);
+    // --- Update clusters with filtered markers only ---
+    if (!clusterGroup) {
+      clusterGroup = L.markerClusterGroup({
+        chunkedLoading: true,
+        showCoverageOnHover: false,
+        disableClusteringAtZoom: 14,
+        maxClusterRadius: zoom => zoom < 12 ? 120 : 60,
+        iconCreateFunction: cluster => {
+          const children  = cluster.getAllChildMarkers();
+          const hasHigh   = children.some(m => m.feature?.severity === "High");
+          const hasMedium = children.some(m => m.feature?.severity === "Medium");
+          const bgColor   = hasHigh ? "#c0392b" : hasMedium ? "#d97706" : "#16a34a";
+          const count     = cluster.getChildCount();
+          const label     = children[0]?.feature?.site?.split(" ")[0] || "?";
+          return L.divIcon({
+            className: "",
+            html: `<div style="min-width:42px;height:42px;background:${bgColor};
+                          color:white;border-radius:8px;display:flex;
+                          flex-direction:column;align-items:center;
+                          justify-content:center;padding:0 8px;
+                          border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);
+                          font-family:var(--font-sans,sans-serif);gap:1px">
+                    <span style="font-size:14px;font-weight:700;line-height:1;">${count}</span>
+                    <span style="font-size:8px;font-weight:600;opacity:.85;
+                                  line-height:1;white-space:nowrap;max-width:52px;
+                                  overflow:hidden;text-overflow:ellipsis;">${label}</span>
+                  </div>`,
+            iconSize: [42,42],
+            iconAnchor: [21,21]
+          });
+        }
+      });
+      map.addLayer(clusterGroup);
+    } else {
+      clusterGroup.clearLayers();
+    }
+
+    features.forEach(f => {
+      const m = markerById[f.id];
+      if (!m) return;
+      if (m._siteClusterGroup) {
+        m._siteClusterGroup.addLayer(m);
+      } else if (clusterGroup) {
+        clusterGroup.addLayer(m); // fallback
+      }
+    });
   }
 
   function highlightCard(id) {
