@@ -20,7 +20,7 @@ let allFeatures           = [];
 let activeSeverityFilter  = "all";
 let activeSearchTerm      = "";
 let activeSiteFilter      = "";
-let activeSortOrder       = "newest"; // "newest" or "oldest"
+let activeSortOrder       = "newest";   // "newest" or "oldest", default sort for issues page
 
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -199,7 +199,6 @@ function initBaseMap(mapId, center, zoom) {
           applyCurrentThemeToSiteLayer(layer);
         }
 
-        // Also handle LayerGroups (your preloaded sites)
         if (layer instanceof L.LayerGroup) {
           layer.eachLayer(sub => {
             if (sub instanceof L.GeoJSON) {
@@ -284,7 +283,6 @@ const totalSites = Object.keys(sites).length;
 let sitesLoadedCount = 0;
 
 // Preload all sites asynchronously
-// Preload all sites asynchronously
 Object.entries(sites).forEach(([siteId, site]) => {
   siteLoadPromises[siteId] = (async () => {
     try {
@@ -360,18 +358,17 @@ function toBase64(file) {
    ==================== FORM PAGE ==========================
    ========================================================= */
 if (isFormPage) {
-
-  const siteSelect  = document.getElementById("siteSelect");
-  const submitBtn   = document.getElementById("submitBtn");
-  const submitText  = document.getElementById("submitBtnText");
+  const siteSelect    = document.getElementById("siteSelect");
+  const submitBtn     = document.getElementById("submitBtn");
+  const submitText    = document.getElementById("submitBtnText");
   const statusMessage = document.getElementById("statusMessage");
-  const photoInput  = document.getElementById("photo");
-  const photoPreview = document.getElementById("photoPreview");
-  const issueType   = document.getElementById("issueType");
-  const severity    = document.getElementById("severity");
-  const description = document.getElementById("description");
-  const fakeFileBtn = document.getElementById("fakeFileBtn");
-  const fileNameEl  = document.getElementById("fileName");
+  const photoInput    = document.getElementById("photo");
+  const photoPreview  = document.getElementById("photoPreview");
+  const issueType     = document.getElementById("issueType");
+  const severity      = document.getElementById("severity");
+  const description   = document.getElementById("description");
+  const fakeFileBtn   = document.getElementById("fakeFileBtn");
+  const fileNameEl    = document.getElementById("fileName");
 
   submitBtn.disabled = true;
 
@@ -486,7 +483,7 @@ if (isFormPage) {
       photoPreview.classList.add("hidden");
       return;
     }
-    // Validate size (10MB)
+    // Validate size (20MB)
     if (file.size > 20 * 1024 * 1024) {
       fileNameEl.textContent = "File too large (max 20MB)";
       photoInput.value = "";
@@ -531,15 +528,15 @@ if (isFormPage) {
     }
 
     const payload = {
-      site:           siteSelect.value,
-      issueType:      issueType.value,
-      severity:       severity.value,
-      latitude:       marker.getLatLng().lat,
-      longitude:      marker.getLatLng().lng,
-      description:    description.value.trim(),
-      submittedAt:    new Date().toISOString(),
-      photoBase64:    photoBase64 ?? null,
-      photoBase64Name: photoBase64Name ?? null
+      site:             siteSelect.value,
+      issueType:        issueType.value,
+      severity:         severity.value,
+      latitude:         marker.getLatLng().lat,
+      longitude:        marker.getLatLng().lng,
+      description:      description.value.trim(),
+      submittedAt:      new Date().toISOString(),
+      photoBase64:      photoBase64 ?? null,
+      photoBase64Name:  photoBase64Name ?? null
     };
 
     try {
