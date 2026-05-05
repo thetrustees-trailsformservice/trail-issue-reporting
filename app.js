@@ -115,6 +115,41 @@ function setActiveMarker(newMarker) {
   newMarker.setIcon(createLeafletIssueIcon(f.issueType, f.severity, true));
 }
 
+// ======================== USER LOCATION ========================
+let userLocationMarker = null;
+let userAccuracyCircle = null;
+
+function enableUserLocation(map, autoZoom = false) {
+  map.locate({
+    setView: autoZoom,
+    maxZoom: 14,
+    enableHighAccuracy: true
+  });
+
+  map.on("locationfound", e => {
+    const latlng  = e.latlng;
+    const radius  = e.accuracy;
+
+    if (userLocationMarker) map.removeLayer(userLocationMarker);
+    if (userAccuracyCircle) map.removeLayer(userAccuracyCircle);
+
+    userLocationMarker = L.circleMarker(latlng, {
+      radius: 8,
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 1
+    }).addTo(map);
+
+    userAccuracyCircle = L.circle(latlng, {
+      radius: radius
+    }).addTo(map);
+  });
+
+  map.on("locationerror", err => {
+    console.warn("Location error:", err.message);
+  });
+}
+
 // ======================== BASE MAP ========================
 const themes = {
   voyager: {
@@ -382,6 +417,26 @@ if (isFormPage) {
 
   // ---- Map init ----
   map = initBaseMap("map", [41.8029231, -70.6108888], 8);
+  enableUserLocation(map, false);
+
+  // --- Locate button ---
+  const locateBtn = L.control({ position: "bottomright" });
+
+  locateBtn.onAdd = function () {
+    const btn = L.DomUtil.create("button", "map-btn");
+    btn.innerHTML = "📍Locate me";
+    btn.title = "Locate Me";
+
+    L.DomEvent.disableClickPropagation(btn);
+
+    btn.addEventListener("click", () => {
+      enableUserLocation(map, true);
+    });
+
+    return btn;
+  };
+
+  locateBtn.addTo(map);
 
   // ---- Map click to place marker ----
   map.on("click", e => {
@@ -661,8 +716,28 @@ if (isFormPage) {
    ========================================================= */
 if (isIssuesPage) {
 
+  // --- Locate button ---
+  const locateBtn = L.control({ position: "bottomright" });
+
+  locateBtn.onAdd = function () {
+    const btn = L.DomUtil.create("button", "map-btn");
+    btn.innerHTML = "📍";
+    btn.title = "Locate Me";
+
+    L.DomEvent.disableClickPropagation(btn);
+
+    btn.addEventListener("click", () => {
+      enableUserLocation(map, true);
+    });
+
+    return btn;
+  };
+
+locateBtn.addTo(map);
+
   // ---- Map init ----
   map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
+  enableUserLocation(map, false);
 
   // ---- Load all site boundaries + trails on the issues map ----
   (async () => {

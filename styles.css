@@ -8,28 +8,28 @@
 
 @font-face {
   font-family: "d-dinregular";
-  src: url("/assets/fonts/d-din-webfont.woff2") format("woff2"),
-       url("/assets/fonts/d-din-webfont.woff") format("woff");
+  src: url("./assets/fonts/d-din-webfont.woff2") format("woff2"),
+       url("./assets/fonts/d-din-webfont.woff") format("woff");
   font-weight: normal;
   font-style: normal;
 }
 
 @font-face {
   font-family: "d-dindin-bold";
-  src: url("/assets/fonts/d-din-bold-webfont.woff2") format("woff2"),
-       url("/assets/fonts/d-din-bold-webfont.woff") format("woff");
+  src: url("./assets/fonts/d-din-bold-webfont.woff2") format("woff2"),
+       url("./assets/fonts/d-din-bold-webfont.woff") format("woff");
   font-weight: bold;
   font-style: normal;
 }
 
 /* ---------- CSS VARIABLES ---------- */
 :root {
-  --brand-green:      #4B6F44;
-  --brand-green-dark: #344f30;
+  --brand-green:      #569602;
+  --brand-green-dark: #2c5234;
   --brand-lime:       #C4D600;
   --brand-lime-dark:  #a8b800;
-  --accent-blue:      #1d6fa4;
-  --accent-blue-light:#e8f4fd;
+  --accent-blue:      #185abc;
+  --accent-blue-light:#1a73e8;
 
   --severity-high:    #c0392b;
   --severity-medium:  #d97706;
@@ -55,7 +55,8 @@
   --radius-lg:  12px;
   --radius-pill: 999px;
 
-  --font-sans: 'IBM Plex Sans', 'd-dinregular', Arial, sans-serif;
+  --font-sans: 'd-dinregular', Arial, sans-serif;
+  --font-bold: 'd-dindin-bold', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
   --nav-height: 60px;
@@ -252,7 +253,7 @@ body {
 }
 
 .form-card-header {
-  background: linear-gradient(135deg, var(--brand-green) 0%, var(--brand-green-dark) 100%);
+  background: var(--brand-green-dark);
   padding: 20px 24px;
   display: flex;
   align-items: center;
@@ -273,14 +274,15 @@ body {
 }
 
 .form-card-header h1 {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 27px;
+  font-weight: 600;
   color: #fff;
   letter-spacing: 0.03em;
 }
 
 .form-card-header p {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 400;
   color: rgba(255,255,255,0.7);
   margin-top: 2px;
 }
