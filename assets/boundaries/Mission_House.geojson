@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "Mission House",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::26986" } },
+"xy_coordinate_resolution": 1e-15,
+"features": [
+{ "type": "Feature", "properties": { "PROPERTY": "Mission House", "PROP_TYPE": "TTOR Reservation", "RES_NUM": 22, "YEAR_ORIG": 1948, "GIS_ACRES": 0.407184, "MGMT_UNIT": "South Berkshire", "Shape_Leng": 163.918188504, "Shape_Area": 1647.8158712100001 }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 50233.151246622204781, 894174.763980995863676 ], [ 50266.779840372502804, 894164.011793497949839 ], [ 50252.889840371906757, 894119.623043496161699 ], [ 50219.094840377569199, 894130.258824747055769 ], [ 50233.151246622204781, 894174.763980995863676 ] ] ] ] } }
+]
+}

@@ -1,0 +1,9 @@
+{
+"type": "FeatureCollection",
+"name": "Redemption Rock",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::26986" } },
+"xy_coordinate_resolution": 1e-15,
+"features": [
+{ "type": "Feature", "properties": { "PROPERTY": "Redemption Rock", "PROP_TYPE": "TTOR Reservation", "RES_NUM": 26, "YEAR_ORIG": 1952, "GIS_ACRES": 0.306367, "MGMT_UNIT": "Central", "Shape_Leng": 143.13919166299999, "Shape_Area": 1239.8245568899999 }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 169627.251090377569199, 917423.499449748545885 ], [ 169609.694527871906757, 917385.201324746012688 ], [ 169582.966090373694897, 917397.454293496906757 ], [ 169600.55265287309885, 917435.817730996757746 ], [ 169627.251090377569199, 917423.499449748545885 ] ] ] ] } }
+]
+}
