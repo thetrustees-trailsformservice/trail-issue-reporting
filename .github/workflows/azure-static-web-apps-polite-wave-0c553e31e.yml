@@ -15,13 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
-      - uses: actions/checkout@v4.2.2  
+      - uses: actions/checkout@v4.2.2
         with:
           submodules: true
           lfs: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4    
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
 
@@ -37,19 +37,6 @@ jobs:
           api_location: "" 
           output_location: "/" 
           ###### End of Repository/Build Configurations ######
-
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    name: Close Pull Request Job
-    steps:
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_POLITE_WAVE_0C553E31E }}
-          action: "close"
-
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
