@@ -4,31 +4,16 @@
    ============================================================= */
 
 /* ---------- FONTS ---------- */
+@import url('assets/fonts/fonts.css');
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
-@font-face {
-  font-family: "d-dinregular";
-  src: url("https://jsdelivr.net") format("woff2"),
-       url("https://jsdelivr.net") format("woff");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "d-dindin-bold";
-  src: url("https://jsdelivr.net") format("woff2"),
-       url("https://jsdelivr.net") format("woff");
-  font-weight: bold;
-  font-style: normal;
-}
 
 /* ---------- CSS VARIABLES ---------- */
 :root {
-  --brand-green:      #569602;
-  --brand-green-dark: #2c5234;
-  --brand-lime:       #C4D600;
+  --brand-green:      #65932f;
+  --brand-green-dark: #395239;
+  --brand-lime:       #c5d446;
   --brand-lime-dark:  #a8b800;
-  --accent-blue:      #185abc;
+  --accent-blue:      #224952;
   --accent-blue-light:#1a73e8;
 
   --severity-high:    #c0392b;
@@ -55,8 +40,10 @@
   --radius-lg:  12px;
   --radius-pill: 999px;
 
-  --font-sans: 'd-dinregular', Arial, sans-serif;
-  --font-bold: 'd-dindin-bold', Arial, sans-serif;
+  --font-din: 'd-dinregular', Arial, sans-serif;
+  --font-din-bold: 'd-dindin-bold', Arial, sans-serif;
+  --font-crimson-pro-light: 'crimson-pro-light', Times, serif;
+  --font-crimson-pro-regular: 'crimson-pro-regular', Times, serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
   --nav-height: 60px;
@@ -78,8 +65,8 @@ html {
 }
 
 body {
-  font-family: var(--font-sans);
-  background: var(--surface-alt);
+  font-family: var(--font-din);
+  background: var(--surface);
   color: var(--text-primary);
   min-height: 100vh;
   display: flex;
@@ -244,7 +231,6 @@ body {
    ============================================================= */
 .form-card {
   background: var(--surface);
-  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
@@ -253,10 +239,11 @@ body {
 }
 
 .form-card-header {
-  background: var(--brand-green-dark);
+  background: var(--accent-blue);
   padding: 20px 24px;
   display: flex;
   align-items: center;
+  box-shadow: var(--shadow-sm);
   gap: 12px;
 }
 
@@ -264,6 +251,10 @@ body {
   width: 40px;
   height: 40px;
   background: rgba(196, 214, 0, 0.2);
+  background-image: url("/assets/Trustees_Logo.jpg");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
   border: 1px solid rgba(196, 214, 0, 0.4);
   border-radius: var(--radius-md);
   display: flex;
@@ -273,18 +264,21 @@ body {
   flex-shrink: 0;
 }
 
-.form-card-header h1 {
-  font-size: 27px;
-  font-weight: 600;
+.form-card-header h3 {
+  font-size: 36px;
+  font-weight: bold;
   color: #fff;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  font-family: var(--font-din-bold);
 }
 
 .form-card-header p {
   font-size: 14px;
   font-weight: 400;
-  color: rgba(255,255,255,0.7);
+  letter-spacing: .16px;
+  color: #fff;
   margin-top: 2px;
+  font-family: var(--font-din);
 }
 
 .form-body {
@@ -297,10 +291,11 @@ body {
 }
 
 .form-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.15em;  
   text-transform: uppercase;
+  font-family: var(--font-din);
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -313,7 +308,7 @@ body {
 .form-section-label::before {
   content: "";
   width: 3px;
-  height: 14px;
+  height: 15px;
   background: var(--brand-lime);
   border-radius: 2px;
   display: inline-block;
@@ -347,7 +342,7 @@ body {
 .input-wrapper textarea {
   width: 100%;
   padding: 20px 12px 6px;
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   font-size: 15px;
   line-height: 1.4;
   background: var(--surface-alt);
@@ -392,7 +387,7 @@ body {
   color: var(--text-muted);
   pointer-events: none;
   transition: all 0.2s ease;
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
 }
 
 .input-wrapper.focussed label,
@@ -481,6 +476,90 @@ body {
   display: none;
 }
 
+/* =============================================================
+   LEAFLET OVERRIDES
+   ============================================================= */
+.leaflet-touch .leaflet-control-layers, .leaflet-touch .leaflet-bar {
+  border: none !important;
+  background-clip: padding-box;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-sm) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.leaflet-control-zoom {
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-sm) !important;
+  border-radius: var(--radius-sm) !important;
+  overflow: hidden;
+}
+
+.leaflet-control-zoom a {
+  background: var(--surface) !important;
+  color: var(--text-secondary) !important;
+  border-bottom-color: var(--border) !important;
+  font-size: 16px !important;
+  line-height: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  transition: background 0.15s ease !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: var(--surface-alt) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Leaflet layers control toggle styles */
+.leaflet-control-layers-toggle {
+  background-color: red !important;
+}
+
+#button-layer-toggle {
+  padding: 0;
+  background-clip: padding-box;
+  transition: background 0.15s ease !important;
+}
+
+#button-layer-toggle .layer-toggle-bg {
+  width: 30px;
+  height: 30px;
+  background-image: url('https://unpkg.com/leaflet@1.9.4/dist/images/layers.png');
+  background-size: 20px 20px; /* Adjust based on your image size */
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+#button-layer-toggle:hover {
+  background-color: #f4f4f4;
+}
+
+/* ---------- LOCATE ME BUTTON ---------- */
+.map-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 6px;
+  background-color: #fff;
+  font-family: var(--font-din);
+  font-size: 14px;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-sm) !important;
+  border-radius: var(--radius-sm) !important;
+  transition: background 0.15s ease !important;
+  text-transform: uppercase;
+  letter-spacing: .36px;
+}
+
+.map-btn:hover {
+  background-color: #f4f4f4;
+}
+
+
+
+
+
 /* ---------- PHOTO UPLOAD ---------- */
 .file-wrapper input[type="file"] {
   display: none;
@@ -513,7 +592,7 @@ body {
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   transition: background 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
@@ -555,28 +634,29 @@ body {
 
 button#submitBtn {
   width: 100%;
-  padding: 15px 20px;
-  background: var(--brand-green);
-  color: #fff;
+  font-size: 12px;
+  line-height: 38px;
+  letter-spacing: .15em;
   border: none;
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
-  display: flex;
+  color: #fff;
+  font-family: var(--font-din);
+  font-weight: 600;
+  margin-top: 32px;
   align-items: center;
+  background-color: #569602;
+  border-radius: 40px;
+  display: inline-flex;
+  height: 50px;
   justify-content: center;
-  gap: 8px;
+  min-width: 100%;
+  padding: 0 28px;
+  text-transform: uppercase;
+  transition: all .3s cubic-bezier(.25,.46,.45,.94);
 }
 
 button#submitBtn:hover:not(:disabled) {
   background: var(--brand-green-dark);
   box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
 }
 
 button#submitBtn:active:not(:disabled) {
@@ -703,7 +783,7 @@ button#submitBtn:disabled {
   white-space: nowrap;
   margin-top: 10px;
   transition: background 0.2s ease;
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
 }
 
 .toast-btn:hover {
@@ -810,7 +890,7 @@ button#submitBtn:disabled {
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   font-size: 13px;
   color: var(--text-primary);
   appearance: none;
@@ -835,7 +915,7 @@ button#submitBtn:disabled {
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   font-size: 13px;
   color: var(--text-primary);
   margin-top: 8px;
@@ -865,7 +945,7 @@ button#submitBtn:disabled {
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   font-size: 13px;
   color: var(--text-primary);
   transition: border-color 0.15s ease;
@@ -896,7 +976,7 @@ button#submitBtn:disabled {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   color: var(--text-secondary);
   transition: all 0.15s ease;
 }
@@ -1105,7 +1185,7 @@ button#submitBtn:disabled {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   color: var(--text-secondary);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -1157,56 +1237,6 @@ button#submitBtn:disabled {
   to   { transform: rotate(360deg); }
 }
 
-/* =============================================================
-   LEAFLET OVERRIDES
-   ============================================================= */
-.leaflet-control-zoom {
-  border: 1px solid var(--border) !important;
-  box-shadow: var(--shadow-sm) !important;
-  border-radius: var(--radius-md) !important;
-  overflow: hidden;
-}
-
-.leaflet-control-zoom a {
-  background: var(--surface) !important;
-  color: var(--text-secondary) !important;
-  border-bottom-color: var(--border) !important;
-  font-size: 16px !important;
-  line-height: 28px !important;
-  width: 28px !important;
-  height: 28px !important;
-  transition: background 0.15s ease !important;
-}
-
-.leaflet-control-zoom a:hover {
-  background: var(--surface-alt) !important;
-  color: var(--text-primary) !important;
-}
-
-/* Leaflet layers control toggle styles */
-.leaflet-control-layers-toggle {
-  background-color: red !important;
-}
-
-#button-layer-toggle {
-  padding: 0;
-  background-clip: padding-box;
-}
-
-#button-layer-toggle .layer-toggle-bg {
-  width: 30px;
-  height: 30px;
-  background-image: url('https://unpkg.com/leaflet@1.9.4/dist/images/layers.png');
-  background-size: 20px 20px; /* Adjust based on your image size */
-  background-repeat: no-repeat;
-  background-position: center;
-}
-
-#button-layer-toggle:hover {
-  background-color: #f4f4f4;
-}
-
-
 /* ---------- CUSTOM POPUP ---------- */
 .leaflet-popup.custom-popup .leaflet-popup-content-wrapper {
   background: #fff;
@@ -1214,7 +1244,7 @@ button#submitBtn:disabled {
   padding: 0;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   min-width: 260px;
   border: 1px solid var(--border);
 }
@@ -1310,7 +1340,7 @@ button#submitBtn:disabled {
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-family: var(--font-sans);
+  font-family: var(--font-din);
   font-weight: 700;
   font-size: 12px;
   transition: background 0.2s ease, opacity 0.2s ease;
