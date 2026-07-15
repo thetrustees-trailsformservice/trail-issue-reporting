@@ -251,7 +251,7 @@ body {
   width: 40px;
   height: 40px;
   background: rgba(196, 214, 0, 0.2);
-  background-image: url("/assets/Trustees_Logo.jpg");
+  background-image: url("/assets/images/Trustees_Logo.jpg");
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
@@ -556,6 +556,15 @@ body {
   background-color: #f4f4f4;
 }
 
+.map-btn-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-image: url("assets/images/locate_pin.svg");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
 
 
 
@@ -584,22 +593,28 @@ body {
 }
 
 .file-row button {
-  padding: 7px 14px;
-  background: var(--brand-green);
+  padding: 8px 10px;
+  background-color: #569602;
   color: white;
   border: none;
-  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: .15em;
   font-weight: 600;
   font-family: var(--font-din);
-  transition: background 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
+  align-items: center;
+  text-transform: uppercase;
+  transition: all .3s cubic-bezier(.25,.46,.45,.94);
+  justify-content: center;
+  border-radius: 40px;
+  display: inline-flex;
 }
 
 .file-row button:hover {
   background: var(--brand-green-dark);
+  box-shadow: var(--shadow-md);
 }
 
 .file-row button:focus {
@@ -613,6 +628,17 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.photo-btn-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-image: url("assets/images/add_photo.svg");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  margin-right: 5px;
 }
 
 /* ---------- PHOTO PREVIEW ---------- */

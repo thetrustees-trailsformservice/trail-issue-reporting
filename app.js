@@ -424,7 +424,7 @@ if (isFormPage) {
 
   locateBtn.onAdd = function () {
     const btn = L.DomUtil.create("button", "map-btn");
-    btn.innerHTML = "📍Locate me";
+    btn.innerHTML = '<span class="map-btn-icon"></span>Locate me';
     btn.title = "Locate Me";
 
     L.DomEvent.disableClickPropagation(btn);
