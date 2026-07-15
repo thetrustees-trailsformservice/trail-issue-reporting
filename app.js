@@ -716,6 +716,10 @@ if (isFormPage) {
    ========================================================= */
 if (isIssuesPage) {
 
+  // ---- Map init ----
+  map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
+  enableUserLocation(map, false);
+
   // --- Locate button ---
   const locateBtn = L.control({ position: "bottomright" });
 
@@ -734,10 +738,6 @@ if (isIssuesPage) {
   };
 
 locateBtn.addTo(map);
-
-  // ---- Map init ----
-  map = initBaseMap("issuesMap", [41.8029231, -70.6108888], 9);
-  enableUserLocation(map, false);
 
   // ---- Load all site boundaries + trails on the issues map ----
   (async () => {
