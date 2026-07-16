@@ -1,5 +1,5 @@
 {
   "globalHeaders": {
-    "Content-Security-Policy": "frame-ancestors 'self' https://thetrustees.org/;"
+    "Content-Security-Policy": "frame-ancestors 'self' https://thetrustees.org https://thetrustees.sharepoint.com;"
   }
 }
